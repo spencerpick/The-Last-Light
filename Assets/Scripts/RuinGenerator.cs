@@ -1,6 +1,6 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
-using TMPro;  // <<== ADD THIS
+using TMPro;
 
 public class RuinGenerator : MonoBehaviour
 {
@@ -14,11 +14,12 @@ public class RuinGenerator : MonoBehaviour
 
     public int totalRooms = 10;
     public int extraConnections = 2;
+
     [Header("Seed 0 = random (new every time)")]
-    public int seed = 0; // <<== NEW
+    public int seed = 0;
 
     [Header("UI")]
-    public TMP_Text seedDisplay; // <<== ADD THIS
+    public TMP_Text seedDisplay;
 
     private Dictionary<Vector2Int, GameObject> placedRooms = new Dictionary<Vector2Int, GameObject>();
     private List<Vector2Int> roomPositions = new List<Vector2Int>();
@@ -26,12 +27,10 @@ public class RuinGenerator : MonoBehaviour
 
     void Start()
     {
-        // Set seed for reproducible procedural generation
         if (seed == 0)
-            seed = System.Environment.TickCount; // new random seed each play
+            seed = System.Environment.TickCount;
         Random.InitState(seed);
 
-        // Display seed at top center if reference is set
         if (seedDisplay != null)
         {
             seedDisplay.text = "Seed: " + seed.ToString();
@@ -46,7 +45,6 @@ public class RuinGenerator : MonoBehaviour
         placedRooms[startPos] = Instantiate(Room_StartPrefab, GridToWorld(startPos), Quaternion.identity);
         roomPositions.Add(startPos);
 
-        // Track parent for each room
         Dictionary<Vector2Int, Vector2Int> parentRoom = new Dictionary<Vector2Int, Vector2Int>();
         parentRoom[startPos] = startPos;
 
@@ -63,9 +61,8 @@ public class RuinGenerator : MonoBehaviour
                 nextPos = basePos + dir;
                 attempts++;
             }
-            if (placedRooms.ContainsKey(nextPos)) continue; // skip if stuck
+            if (placedRooms.ContainsKey(nextPos)) continue;
 
-            // Pick room type
             GameObject prefab;
             if (i == totalRooms - 1)
                 prefab = Room_HeartfirePrefab;
@@ -83,11 +80,9 @@ public class RuinGenerator : MonoBehaviour
             roomPositions.Add(nextPos);
             parentRoom[nextPos] = basePos;
 
-            // Place corridor between basePos and nextPos
             PlaceCorridor(basePos, nextPos);
         }
 
-        // Optionally, add extra loops/connections between existing rooms
         int connectionsMade = 0;
         for (int i = 0; i < roomPositions.Count; i++)
         {
@@ -96,13 +91,27 @@ public class RuinGenerator : MonoBehaviour
                 Vector2Int neighbor = roomPositions[i] + dir;
                 if (placedRooms.ContainsKey(neighbor))
                 {
-                    // Avoid duplicate/parent corridors
                     if (parentRoom.ContainsKey(neighbor) && parentRoom[neighbor] == roomPositions[i]) continue;
                     if (parentRoom.ContainsKey(roomPositions[i]) && parentRoom[roomPositions[i]] == neighbor) continue;
 
                     PlaceCorridor(roomPositions[i], neighbor);
                     connectionsMade++;
-                    if (connectionsMade >= extraConnections) return;
+                    if (connectionsMade >= extraConnections) break;
+                }
+            }
+        }
+
+        // 🔥 NEW: Remove room walls based on surrounding connections
+        foreach (var pos in roomPositions)
+        {
+            GameObject room = placedRooms[pos];
+            foreach (var dir in directions)
+            {
+                Vector2Int neighbor = pos + dir;
+                if (placedRooms.ContainsKey(neighbor))
+                {
+                    string wallToDisable = DirectionToWallName(dir);
+                    DisableWall(room, wallToDisable);
                 }
             }
         }
@@ -110,33 +119,62 @@ public class RuinGenerator : MonoBehaviour
 
     Vector3 GridToWorld(Vector2Int gridPos)
     {
-        float spacing = 3f; // Make sure this matches your prefab size!
+        float spacing = 3f;
         return new Vector3(gridPos.x * spacing, gridPos.y * spacing, 0);
     }
 
     void PlaceCorridor(Vector2Int a, Vector2Int b)
     {
-        float spacing = 3f; // Same as your GridToWorld
-        float roomSize = 1f; // Match to your actual prefab size (try 1f if 2f is too short)
+        float spacing = 3f;
+        float roomSize = 1f;
 
         Vector3 posA = GridToWorld(a);
         Vector3 posB = GridToWorld(b);
+        GameObject corridor = null;
 
         if (a.y == b.y) // horizontal
         {
             float sign = Mathf.Sign(b.x - a.x);
             float corridorLength = spacing - roomSize;
             Vector3 corridorPos = posA + new Vector3(sign * (spacing / 2f), 0, 0);
-            GameObject corridor = Instantiate(CorridorPrefab, corridorPos, Quaternion.identity);
+            corridor = Instantiate(CorridorPrefab, corridorPos, Quaternion.identity);
             corridor.transform.localScale = new Vector3(corridorLength, 0.5f, 1f);
+
+            DisableWall(corridor, "Wall_Left");
+            DisableWall(corridor, "Wall_Right");
         }
         else if (a.x == b.x) // vertical
         {
             float sign = Mathf.Sign(b.y - a.y);
             float corridorLength = spacing - roomSize;
             Vector3 corridorPos = posA + new Vector3(0, sign * (spacing / 2f), 0);
-            GameObject corridor = Instantiate(CorridorPrefab, corridorPos, Quaternion.identity);
+            corridor = Instantiate(CorridorPrefab, corridorPos, Quaternion.identity);
             corridor.transform.localScale = new Vector3(0.5f, corridorLength, 1f);
+
+            DisableWall(corridor, "Wall_Top");
+            DisableWall(corridor, "Wall_Bottom");
         }
+    }
+
+    void DisableWall(GameObject obj, string wallName)
+    {
+        Transform wall = obj.transform.Find(wallName);
+        if (wall != null)
+        {
+            wall.gameObject.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning($"Wall '{wallName}' not found on {obj.name}");
+        }
+    }
+
+    string DirectionToWallName(Vector2Int dir)
+    {
+        if (dir == Vector2Int.up) return "Wall_Top";
+        if (dir == Vector2Int.down) return "Wall_Bottom";
+        if (dir == Vector2Int.left) return "Wall_Left";
+        if (dir == Vector2Int.right) return "Wall_Right";
+        return "";
     }
 }
