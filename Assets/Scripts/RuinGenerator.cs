@@ -11,6 +11,7 @@ public class RuinGenerator : MonoBehaviour
     public GameObject Room_BossPrefab;
     public GameObject Room_HeartfirePrefab;
     public GameObject CorridorPrefab;
+    public GameObject PlayerPrefab;  // <--- ADD THIS
 
     public int totalRooms = 10;
     public int extraConnections = 2;
@@ -24,6 +25,9 @@ public class RuinGenerator : MonoBehaviour
     private Dictionary<Vector2Int, GameObject> placedRooms = new Dictionary<Vector2Int, GameObject>();
     private List<Vector2Int> roomPositions = new List<Vector2Int>();
     private Vector2Int[] directions = { Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left };
+
+    // To remember where the start room is
+    private Vector3 startRoomWorldPos;
 
     void Start()
     {
@@ -42,8 +46,10 @@ public class RuinGenerator : MonoBehaviour
     void GenerateDungeon()
     {
         Vector2Int startPos = Vector2Int.zero;
-        placedRooms[startPos] = Instantiate(Room_StartPrefab, GridToWorld(startPos), Quaternion.identity);
+        var startRoom = Instantiate(Room_StartPrefab, GridToWorld(startPos), Quaternion.identity);
+        placedRooms[startPos] = startRoom;
         roomPositions.Add(startPos);
+        startRoomWorldPos = GridToWorld(startPos); // Save for player spawn
 
         Dictionary<Vector2Int, Vector2Int> parentRoom = new Dictionary<Vector2Int, Vector2Int>();
         parentRoom[startPos] = startPos;
@@ -114,6 +120,16 @@ public class RuinGenerator : MonoBehaviour
                     DisableWall(room, wallToDisable);
                 }
             }
+        }
+
+        // --- SPAWN THE PLAYER in the center of the Start Room
+        if (PlayerPrefab != null)
+        {
+            Instantiate(PlayerPrefab, startRoomWorldPos, Quaternion.identity);
+        }
+        else
+        {
+            Debug.LogWarning("PlayerPrefab not assigned in RuinGenerator.");
         }
     }
 
