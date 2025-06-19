@@ -101,7 +101,7 @@ public class RuinGenerator : MonoBehaviour
             }
         }
 
-        // 🔥 NEW: Remove room walls based on surrounding connections
+        // Remove room walls based on surrounding connections
         foreach (var pos in roomPositions)
         {
             GameObject room = placedRooms[pos];
