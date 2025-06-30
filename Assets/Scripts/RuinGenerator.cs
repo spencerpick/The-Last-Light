@@ -125,8 +125,21 @@ public class RuinGenerator : MonoBehaviour
         // --- SPAWN THE PLAYER in the center of the Start Room
         if (PlayerPrefab != null)
         {
-            Instantiate(PlayerPrefab, startRoomWorldPos, Quaternion.identity);
+            GameObject player = Instantiate(PlayerPrefab, startRoomWorldPos, Quaternion.identity);
+
+            // Check what room the player is inside and manually call EnterRoom
+            Collider2D[] overlapping = Physics2D.OverlapCircleAll(startRoomWorldPos, 0.1f);
+            foreach (var col in overlapping)
+            {
+                RoomTrigger room = col.GetComponent<RoomTrigger>();
+                if (room != null)
+                {
+                    GameManager.Instance.EnterRoom(room);
+                    break;
+                }
+            }
         }
+
         else
         {
             Debug.LogWarning("PlayerPrefab not assigned in RuinGenerator.");
