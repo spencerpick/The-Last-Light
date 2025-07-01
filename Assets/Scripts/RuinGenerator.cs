@@ -34,46 +34,78 @@ public class RuinGenerator : MonoBehaviour
     {
         Vector2Int currentPos = Vector2Int.zero;
         GameObject startRoom = Instantiate(roomPrefab, ruinContainer);
-        startRoom.transform.position = Vector3.zero;
+        RoomProfile startProfile = startRoom.GetComponent<RoomProfile>();
+        Vector2Int startSize = startProfile.size;
+
+        startRoom.transform.position = new Vector3(currentPos.x, currentPos.y, 0);
         placedRooms.Add(startRoom);
-        occupiedGrid.Add(currentPos);
-        gridToRoom[currentPos] = startRoom;
+        MarkOccupiedCells(currentPos, startSize, startRoom);
 
         for (int i = 1; i < totalRooms; i++)
         {
             Vector2Int direction = directions[Random.Range(0, directions.Length)];
             Vector2Int nextPos = currentPos + direction;
 
-            if (occupiedGrid.Contains(nextPos))
+            GameObject tempRoom = Instantiate(roomPrefab); // for size check only
+            RoomProfile tempProfile = tempRoom.GetComponent<RoomProfile>();
+            Vector2Int roomSize = tempProfile.size;
+            Destroy(tempRoom);
+
+            if (!CanPlaceRoom(nextPos, roomSize))
             {
                 i--;
                 continue;
             }
 
             GameObject newRoom = Instantiate(roomPrefab, ruinContainer);
-            newRoom.transform.position = new Vector3(nextPos.x * 16f, nextPos.y * 16f, 0);
+            newRoom.transform.position = new Vector3(nextPos.x, nextPos.y, 0);
             placedRooms.Add(newRoom);
-            occupiedGrid.Add(nextPos);
-            gridToRoom[nextPos] = newRoom;
+            MarkOccupiedCells(nextPos, roomSize, newRoom);
 
             connectedPairs.Add((currentPos, nextPos));
             connectedPairs.Add((nextPos, currentPos));
 
-            Transform fromAnchor = FindAnchor(startRoom, DirectionToAnchorName(direction));
+            Transform fromAnchor = FindAnchor(gridToRoom[currentPos], DirectionToAnchorName(direction));
             Transform toAnchor = FindAnchor(newRoom, DirectionToAnchorName(-direction));
+
             if (fromAnchor != null && toAnchor != null)
             {
                 CreateCorridorBetweenAnchors(fromAnchor, toAnchor, direction);
-                DisableDoorAtAnchor(startRoom, DirectionToDoorName(direction));
+                DisableDoorAtAnchor(gridToRoom[currentPos], DirectionToDoorName(direction));
                 DisableDoorAtAnchor(newRoom, DirectionToDoorName(-direction));
             }
 
             currentPos = nextPos;
-            startRoom = newRoom;
         }
 
         AddExtraConnections();
-        AddJunctions(); // NEW
+        AddJunctions();
+    }
+
+    void MarkOccupiedCells(Vector2Int basePos, Vector2Int size, GameObject room)
+    {
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                Vector2Int pos = basePos + new Vector2Int(x, y);
+                occupiedGrid.Add(pos);
+                gridToRoom[pos] = room;
+            }
+        }
+    }
+
+    bool CanPlaceRoom(Vector2Int basePos, Vector2Int size)
+    {
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                if (occupiedGrid.Contains(basePos + new Vector2Int(x, y)))
+                    return false;
+            }
+        }
+        return true;
     }
 
     void AddExtraConnections()
@@ -113,8 +145,7 @@ public class RuinGenerator : MonoBehaviour
 
     void AddJunctions()
     {
-        // Placeholder: In future, detect empty grid cells between 3–4 rooms or corridors
-        // and spawn a junction prefab accordingly.
+        // Future implementation
     }
 
     void CreateCorridorBetweenAnchors(Transform fromAnchor, Transform toAnchor, Vector2Int direction)
@@ -131,13 +162,13 @@ public class RuinGenerator : MonoBehaviour
 
         for (int i = 0; i < segmentCount; i++)
         {
-            GameObject segment = Instantiate(corridorPrefabs[0], ruinContainer); // straight for now
+            GameObject segment = Instantiate(corridorPrefabs[0], ruinContainer);
             segment.transform.position = initialPosition + dir * segmentLength * i;
 
             if (Mathf.Abs(dir.x) > 0.1f)
-                segment.transform.rotation = Quaternion.Euler(0, 0, 90); // horizontal
+                segment.transform.rotation = Quaternion.Euler(0, 0, 90);
             else
-                segment.transform.rotation = Quaternion.identity; // vertical
+                segment.transform.rotation = Quaternion.identity;
         }
     }
 
