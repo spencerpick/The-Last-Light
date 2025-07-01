@@ -7,9 +7,10 @@ public class RuinGenerator : MonoBehaviour
     public GameObject roomPrefab;
     public List<GameObject> corridorPrefabs; // 0 = Straight, 1 = Turn, 2 = T-Junction, 3 = Cross
 
-    public int totalRooms = 10;
-    public int extraConnections = 2;
-    public int maxJunctions = 3;
+    public int totalRooms = 5;
+    public int extraConnections = 0;
+    public int maxJunctions = 0;
+    public float corridorLength = 10f;
     public Transform ruinContainer;
 
     private List<GameObject> placedRooms = new List<GameObject>();
@@ -25,6 +26,8 @@ public class RuinGenerator : MonoBehaviour
         new Vector2Int(-1, 0),  // Left
     };
 
+    private Vector2 worldGridStep; // how far rooms are spaced in world units
+
     void Start()
     {
         GenerateRuin();
@@ -32,120 +35,79 @@ public class RuinGenerator : MonoBehaviour
 
     void GenerateRuin()
     {
-        Vector2Int currentPos = Vector2Int.zero;
+        // Use prefab size to define world spacing
+        GameObject sizeSample = Instantiate(roomPrefab);
+        RoomProfile profile = sizeSample.GetComponent<RoomProfile>();
+        float roomWidth = profile.size.x;
+        float roomHeight = profile.size.y;
+        Destroy(sizeSample);
+
+        worldGridStep = new Vector2(roomWidth + corridorLength, roomHeight + corridorLength);
+
+        Vector2Int currentGridPos = Vector2Int.zero;
+        Vector3 currentWorldPos = Vector3.zero;
+
         GameObject startRoom = Instantiate(roomPrefab, ruinContainer);
-        RoomProfile startProfile = startRoom.GetComponent<RoomProfile>();
-        Vector2Int startSize = startProfile.size;
-
-        startRoom.transform.position = new Vector3(currentPos.x, currentPos.y, 0);
+        startRoom.transform.position = currentWorldPos;
         placedRooms.Add(startRoom);
-        MarkOccupiedCells(currentPos, startSize, startRoom);
+        MarkOccupiedCell(currentGridPos, startRoom);
+        gridToRoom[currentGridPos] = startRoom;
 
-        for (int i = 1; i < totalRooms; i++)
+        int placed = 1;
+        int safetyCounter = 0;
+
+        while (placed < totalRooms && safetyCounter < 500)
         {
+            safetyCounter++;
+
             Vector2Int direction = directions[Random.Range(0, directions.Length)];
-            Vector2Int nextPos = currentPos + direction;
+            Vector2Int nextGridPos = currentGridPos + direction;
 
-            GameObject tempRoom = Instantiate(roomPrefab); // for size check only
-            RoomProfile tempProfile = tempRoom.GetComponent<RoomProfile>();
-            Vector2Int roomSize = tempProfile.size;
-            Destroy(tempRoom);
-
-            if (!CanPlaceRoom(nextPos, roomSize))
-            {
-                i--;
+            if (!CanPlaceRoom(nextGridPos))
                 continue;
-            }
+
+            Vector3 nextWorldPos = currentWorldPos + new Vector3(
+                direction.x * worldGridStep.x,
+                direction.y * worldGridStep.y,
+                0f
+            );
 
             GameObject newRoom = Instantiate(roomPrefab, ruinContainer);
-            newRoom.transform.position = new Vector3(nextPos.x, nextPos.y, 0);
+            newRoom.transform.position = nextWorldPos;
             placedRooms.Add(newRoom);
-            MarkOccupiedCells(nextPos, roomSize, newRoom);
+            MarkOccupiedCell(nextGridPos, newRoom);
+            gridToRoom[nextGridPos] = newRoom;
 
-            connectedPairs.Add((currentPos, nextPos));
-            connectedPairs.Add((nextPos, currentPos));
+            connectedPairs.Add((currentGridPos, nextGridPos));
+            connectedPairs.Add((nextGridPos, currentGridPos));
 
-            Transform fromAnchor = FindAnchor(gridToRoom[currentPos], DirectionToAnchorName(direction));
+            Transform fromAnchor = FindAnchor(gridToRoom[currentGridPos], DirectionToAnchorName(direction));
             Transform toAnchor = FindAnchor(newRoom, DirectionToAnchorName(-direction));
 
             if (fromAnchor != null && toAnchor != null)
             {
                 CreateCorridorBetweenAnchors(fromAnchor, toAnchor, direction);
-                DisableDoorAtAnchor(gridToRoom[currentPos], DirectionToDoorName(direction));
+                DisableDoorAtAnchor(gridToRoom[currentGridPos], DirectionToDoorName(direction));
                 DisableDoorAtAnchor(newRoom, DirectionToDoorName(-direction));
             }
 
-            currentPos = nextPos;
+            currentGridPos = nextGridPos;
+            currentWorldPos = nextWorldPos;
+            placed++;
         }
 
-        AddExtraConnections();
-        AddJunctions();
+        Debug.Log($"Placed {placed} rooms (attempts: {safetyCounter})");
     }
 
-    void MarkOccupiedCells(Vector2Int basePos, Vector2Int size, GameObject room)
+    void MarkOccupiedCell(Vector2Int gridPos, GameObject room)
     {
-        for (int x = 0; x < size.x; x++)
-        {
-            for (int y = 0; y < size.y; y++)
-            {
-                Vector2Int pos = basePos + new Vector2Int(x, y);
-                occupiedGrid.Add(pos);
-                gridToRoom[pos] = room;
-            }
-        }
+        occupiedGrid.Add(gridPos);
+        gridToRoom[gridPos] = room;
     }
 
-    bool CanPlaceRoom(Vector2Int basePos, Vector2Int size)
+    bool CanPlaceRoom(Vector2Int gridPos)
     {
-        for (int x = 0; x < size.x; x++)
-        {
-            for (int y = 0; y < size.y; y++)
-            {
-                if (occupiedGrid.Contains(basePos + new Vector2Int(x, y)))
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    void AddExtraConnections()
-    {
-        int added = 0;
-        int attempts = 0;
-
-        while (added < extraConnections && attempts < 100)
-        {
-            Vector2Int a = occupiedGrid[Random.Range(0, occupiedGrid.Count)];
-            Vector2Int dir = directions[Random.Range(0, directions.Length)];
-            Vector2Int b = a + dir;
-
-            if (occupiedGrid.Contains(b) && !connectedPairs.Contains((a, b)))
-            {
-                GameObject roomA = gridToRoom[a];
-                GameObject roomB = gridToRoom[b];
-
-                Transform anchorA = FindAnchor(roomA, DirectionToAnchorName(dir));
-                Transform anchorB = FindAnchor(roomB, DirectionToAnchorName(-dir));
-
-                if (anchorA != null && anchorB != null)
-                {
-                    connectedPairs.Add((a, b));
-                    connectedPairs.Add((b, a));
-
-                    CreateCorridorBetweenAnchors(anchorA, anchorB, dir);
-                    DisableDoorAtAnchor(roomA, DirectionToDoorName(dir));
-                    DisableDoorAtAnchor(roomB, DirectionToDoorName(-dir));
-                    added++;
-                }
-            }
-
-            attempts++;
-        }
-    }
-
-    void AddJunctions()
-    {
-        // Future implementation
+        return !occupiedGrid.Contains(gridPos);
     }
 
     void CreateCorridorBetweenAnchors(Transform fromAnchor, Transform toAnchor, Vector2Int direction)
