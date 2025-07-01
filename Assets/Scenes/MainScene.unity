@@ -201,7 +201,7 @@ MonoBehaviour:
   - {fileID: 8837244718160740862, guid: 5991d5456aec61848a79729c633afad4, type: 3}
   - {fileID: 8837244718160740862, guid: 00d69e3428d6bbf488b83f28a7702797, type: 3}
   - {fileID: 8837244718160740862, guid: 956e1d18129f5264d9f245b6f2d7fad1, type: 3}
-  totalRooms: 14
+  totalRooms: 7
   extraConnections: 2
   maxJunctions: 3
   ruinContainer: {fileID: 861627781}

@@ -10,7 +10,6 @@ public class RuinGenerator : MonoBehaviour
     public int totalRooms = 5;
     public int extraConnections = 0;
     public int maxJunctions = 0;
-    public float corridorLength = 10f;
     public Transform ruinContainer;
 
     private List<GameObject> placedRooms = new List<GameObject>();
@@ -26,7 +25,7 @@ public class RuinGenerator : MonoBehaviour
         new Vector2Int(-1, 0),  // Left
     };
 
-    private Vector2 worldGridStep; // how far rooms are spaced in world units
+    private Vector2 baseRoomSize;
 
     void Start()
     {
@@ -35,14 +34,11 @@ public class RuinGenerator : MonoBehaviour
 
     void GenerateRuin()
     {
-        // Use prefab size to define world spacing
+        // Get room size for base spacing
         GameObject sizeSample = Instantiate(roomPrefab);
         RoomProfile profile = sizeSample.GetComponent<RoomProfile>();
-        float roomWidth = profile.size.x;
-        float roomHeight = profile.size.y;
+        baseRoomSize = new Vector2(profile.size.x, profile.size.y);
         Destroy(sizeSample);
-
-        worldGridStep = new Vector2(roomWidth + corridorLength, roomHeight + corridorLength);
 
         Vector2Int currentGridPos = Vector2Int.zero;
         Vector3 currentWorldPos = Vector3.zero;
@@ -66,9 +62,11 @@ public class RuinGenerator : MonoBehaviour
             if (!CanPlaceRoom(nextGridPos))
                 continue;
 
+            float corridorLength = Random.Range(3f, 10f); // 🌀 random corridor length
+
             Vector3 nextWorldPos = currentWorldPos + new Vector3(
-                direction.x * worldGridStep.x,
-                direction.y * worldGridStep.y,
+                direction.x * (baseRoomSize.x + corridorLength),
+                direction.y * (baseRoomSize.y + corridorLength),
                 0f
             );
 
@@ -116,9 +114,9 @@ public class RuinGenerator : MonoBehaviour
         Vector3 end = toAnchor.position;
         Vector3 dir = (end - start).normalized;
 
-        float corridorLength = Vector3.Distance(start, end);
         float segmentLength = 1f;
-        int segmentCount = Mathf.RoundToInt(corridorLength / segmentLength);
+        float totalDistance = Vector3.Distance(start, end);
+        int segmentCount = Mathf.CeilToInt(totalDistance / segmentLength); // always covers gap fully
 
         Vector3 initialPosition = start + (dir * segmentLength * 0.5f);
 
