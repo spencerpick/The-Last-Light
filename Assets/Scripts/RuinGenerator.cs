@@ -4,16 +4,15 @@ using UnityEngine;
 
 public class RuinGenerator : MonoBehaviour
 {
-    public GameObject roomPrefab;
+    public List<GameObject> roomPrefabs; // Multiple room types
     public List<GameObject> corridorPrefabs; // 0 = Straight, 1 = Turn, 2 = T-Junction, 3 = Cross
 
     public int totalRooms = 5;
     public int extraConnections = 0;
     public int maxJunctions = 0;
+    public int minCorridorLength = 3;
+    public int maxCorridorLength = 10;
     public Transform ruinContainer;
-
-    public int corridorMinLength = 3;
-    public int corridorMaxLength = 10;
 
     private List<GameObject> placedRooms = new List<GameObject>();
     private List<Vector2Int> occupiedGrid = new List<Vector2Int>();
@@ -35,14 +34,14 @@ public class RuinGenerator : MonoBehaviour
 
     void GenerateRuin()
     {
-        Vector2Int currentPos = Vector2Int.zero;
-        GameObject startRoom = Instantiate(roomPrefab, ruinContainer);
+        Vector2Int currentGridPos = Vector2Int.zero;
+        GameObject startRoom = Instantiate(roomPrefabs[Random.Range(0, roomPrefabs.Count)], ruinContainer);
         RoomProfile startProfile = startRoom.GetComponent<RoomProfile>();
         Vector2Int startSize = startProfile.size;
 
-        startRoom.transform.position = new Vector3(currentPos.x, currentPos.y, 0);
+        startRoom.transform.position = Vector3.zero;
         placedRooms.Add(startRoom);
-        MarkOccupiedCells(currentPos, startSize, startRoom);
+        MarkOccupiedCells(currentGridPos, startSize, startRoom);
 
         int placed = 1;
         int safetyCounter = 0;
@@ -52,50 +51,50 @@ public class RuinGenerator : MonoBehaviour
             safetyCounter++;
 
             Vector2Int direction = directions[Random.Range(0, directions.Length)];
-            RoomProfile currentProfile = gridToRoom[currentPos].GetComponent<RoomProfile>();
+            GameObject currentRoom = gridToRoom[currentGridPos];
+            RoomProfile currentProfile = currentRoom.GetComponent<RoomProfile>();
             Vector2Int currentSize = currentProfile.size;
 
-            int corridorLength = Random.Range(corridorMinLength, corridorMaxLength + 1);
+            int corridorLength = Random.Range(minCorridorLength, maxCorridorLength + 1);
 
-            Vector2Int gap = direction * corridorLength;
-
-            GameObject tempRoom = Instantiate(roomPrefab);
+            GameObject newRoomPrefab = roomPrefabs[Random.Range(0, roomPrefabs.Count)];
+            GameObject tempRoom = Instantiate(newRoomPrefab);
             RoomProfile tempProfile = tempRoom.GetComponent<RoomProfile>();
-            Vector2Int newRoomSize = tempProfile.size;
+            Vector2Int newSize = tempProfile.size;
             Destroy(tempRoom);
 
-            Vector2Int nextPos = currentPos + direction * (currentSize + newRoomSize) / 2 + gap;
+            Vector2Int offset = direction * (corridorLength + (direction.x != 0 ? (currentSize.x + newSize.x) / 2 : (currentSize.y + newSize.y) / 2));
+            Vector2Int nextGridPos = currentGridPos + offset;
 
-            if (!CanPlaceRoom(nextPos, newRoomSize))
+            if (!CanPlaceRoom(nextGridPos, newSize))
                 continue;
 
-            GameObject newRoom = Instantiate(roomPrefab, ruinContainer);
-            newRoom.transform.position = new Vector3(nextPos.x, nextPos.y, 0);
+            GameObject newRoom = Instantiate(newRoomPrefab, ruinContainer);
+            Vector3 currentRoomWorldPos = currentRoom.transform.position;
+            Vector3 nextRoomWorldPos = currentRoomWorldPos + new Vector3(offset.x, offset.y, 0);
+            newRoom.transform.position = nextRoomWorldPos;
+
             placedRooms.Add(newRoom);
-            MarkOccupiedCells(nextPos, newRoomSize, newRoom);
+            MarkOccupiedCells(nextGridPos, newSize, newRoom);
 
-            connectedPairs.Add((currentPos, nextPos));
-            connectedPairs.Add((nextPos, currentPos));
+            connectedPairs.Add((currentGridPos, nextGridPos));
+            connectedPairs.Add((nextGridPos, currentGridPos));
 
-            Transform fromAnchor = FindAnchor(gridToRoom[currentPos], DirectionToAnchorName(direction));
+            Transform fromAnchor = FindAnchor(currentRoom, DirectionToAnchorName(direction));
             Transform toAnchor = FindAnchor(newRoom, DirectionToAnchorName(-direction));
 
             if (fromAnchor != null && toAnchor != null)
             {
                 CreateCorridorBetweenAnchors(fromAnchor, toAnchor, direction);
-                DisableDoorAtAnchor(gridToRoom[currentPos], DirectionToDoorName(direction));
+                DisableDoorAtAnchor(currentRoom, DirectionToDoorName(direction));
                 DisableDoorAtAnchor(newRoom, DirectionToDoorName(-direction));
             }
 
-            currentPos = nextPos;
+            currentGridPos = nextGridPos;
             placed++;
         }
 
         Debug.Log($"Placed {placed} rooms (attempts: {safetyCounter})");
-
-        // Leave these disabled until placement is stable
-        // AddExtraConnections();
-        // AddJunctions();
     }
 
     void MarkOccupiedCells(Vector2Int basePos, Vector2Int size, GameObject room)
@@ -131,15 +130,15 @@ public class RuinGenerator : MonoBehaviour
         Vector3 dir = (end - start).normalized;
 
         float segmentLength = 1f;
-        float distance = Vector3.Distance(start, end);
-        int segmentCount = Mathf.RoundToInt(distance / segmentLength);
+        float corridorLength = Vector3.Distance(start, end);
+        int segmentCount = Mathf.RoundToInt(corridorLength / segmentLength);
+
+        Vector3 initialPosition = start + (dir * segmentLength * 0.5f);
 
         for (int i = 0; i < segmentCount; i++)
         {
-            Vector3 segmentPos = start + dir * segmentLength * (i + 0.5f);
-
             GameObject segment = Instantiate(corridorPrefabs[0], ruinContainer);
-            segment.transform.position = segmentPos;
+            segment.transform.position = initialPosition + dir * segmentLength * i;
 
             if (Mathf.Abs(dir.x) > 0.1f)
                 segment.transform.rotation = Quaternion.Euler(0, 0, 90);
@@ -179,7 +178,4 @@ public class RuinGenerator : MonoBehaviour
         if (dir == Vector2Int.left) return "Door_Left";
         return "Door_Unknown";
     }
-
-    void AddExtraConnections() { }
-    void AddJunctions() { }
 }

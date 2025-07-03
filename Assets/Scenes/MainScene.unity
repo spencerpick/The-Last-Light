@@ -195,7 +195,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d62ecfa20b95ad34488e7e9f0e79b0fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  roomPrefab: {fileID: 6512577838794503420, guid: dee12181ef4f28a4192fd483d305b597, type: 3}
+  roomPrefabs:
+  - {fileID: 6512577838794503420, guid: 3e15c2f260dfba14faba4154fb35b62c, type: 3}
+  - {fileID: 6512577838794503420, guid: dee12181ef4f28a4192fd483d305b597, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
   - {fileID: 8837244718160740862, guid: 5991d5456aec61848a79729c633afad4, type: 3}
@@ -204,6 +206,8 @@ MonoBehaviour:
   totalRooms: 7
   extraConnections: 2
   maxJunctions: 3
+  minCorridorLength: 3
+  maxCorridorLength: 10
   ruinContainer: {fileID: 861627781}
 --- !u!4 &276941684
 Transform:
