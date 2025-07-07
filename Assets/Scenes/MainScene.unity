@@ -206,8 +206,8 @@ MonoBehaviour:
   totalRooms: 7
   extraConnections: 2
   maxJunctions: 3
-  minCorridorLength: 3
-  maxCorridorLength: 10
+  fixedCorridorLength: 5
+  seed: 3282859
   ruinContainer: {fileID: 861627781}
 --- !u!4 &276941684
 Transform:
