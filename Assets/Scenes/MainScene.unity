@@ -207,7 +207,7 @@ MonoBehaviour:
   extraConnections: 2
   maxJunctions: 3
   fixedCorridorLength: 5
-  seed: 3282859
+  seed: -1
   ruinContainer: {fileID: 861627781}
 --- !u!4 &276941684
 Transform:
