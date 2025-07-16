@@ -211,7 +211,7 @@ MonoBehaviour:
   totalRooms: 7
   extraConnections: 2
   maxJunctions: 3
-  minCorridorLength: 6
+  minCorridorLength: 10
   seed: -1
   actualSeedUsed: 0
   ruinContainer: {fileID: 861627781}
@@ -338,7 +338,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 8.4375
+  orthographic size: 5.625
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
