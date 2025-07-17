@@ -4,9 +4,12 @@ using UnityEngine;
 
 public class RuinGenerator : MonoBehaviour
 {
+    [Header("Room Prefabs")]
+    public GameObject starterRoomPrefab;      // Assign your starting room prefab here in the Inspector
     public List<GameObject> roomPrefabs;
     public List<GameObject> corridorPrefabs; // 0 = Straight, 1 = Turn, 2 = T-Junction, 3 = Cross
 
+    [Header("Generation Settings")]
     public int totalRooms = 5;
     public int extraConnections = 0;
     public int maxJunctions = 0;
@@ -16,8 +19,10 @@ public class RuinGenerator : MonoBehaviour
     [SerializeField]
     private int actualSeedUsed;
 
+    [Header("Scene References")]
     public Transform ruinContainer;
 
+    // Internal generation state
     private List<GameObject> placedRooms = new List<GameObject>();
     private List<Vector2Int> occupiedGrid = new List<Vector2Int>();
     private Dictionary<Vector2Int, GameObject> gridToRoom = new Dictionary<Vector2Int, GameObject>();
@@ -42,7 +47,9 @@ public class RuinGenerator : MonoBehaviour
     void GenerateRuin()
     {
         Vector2Int currentGridPos = Vector2Int.zero;
-        GameObject startRoom = Instantiate(roomPrefabs[Random.Range(0, roomPrefabs.Count)], ruinContainer);
+
+        // --- Place the starter room only once at the beginning ---
+        GameObject startRoom = Instantiate(starterRoomPrefab, ruinContainer);
         RoomProfile startProfile = startRoom.GetComponent<RoomProfile>();
         Vector2Int startSize = startProfile.size;
 
@@ -135,7 +142,7 @@ public class RuinGenerator : MonoBehaviour
 
         float segmentLength = 1f;
         float corridorLength = Vector3.Distance(start, end);
-        int segmentCount = Mathf.RoundToInt(corridorLength / segmentLength); // snap instead of ceil
+        int segmentCount = Mathf.RoundToInt(corridorLength / segmentLength);
 
         Vector3 initialPosition = start + (dir * segmentLength * 0.5f);
 
