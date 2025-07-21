@@ -195,16 +195,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d62ecfa20b95ad34488e7e9f0e79b0fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  starterRoomPrefab: {fileID: 6512577838794503420, guid: 3e15c2f260dfba14faba4154fb35b62c, type: 3}
+  starterRoomPrefab: {fileID: 8436021003597613976, guid: fde54186573f4e944bbdcb4e32734616, type: 3}
   roomPrefabs:
-  - {fileID: 6512577838794503420, guid: dee12181ef4f28a4192fd483d305b597, type: 3}
-  - {fileID: 6512577838794503420, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
-  - {fileID: 6512577838794503420, guid: 9545311fc69e45a4284738f6b98cb844, type: 3}
+  - {fileID: 8538507913519116581, guid: 246503efbab23164ab3f082568d25476, type: 3}
+  - {fileID: 2301053307580042512, guid: 6a3b0893a67025a42950230726c05bf1, type: 3}
+  - {fileID: 1497774974633293288, guid: d1bc1c5e14001914fbd265bcddd2aa8a, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
-  - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
-  totalRooms: 7
-  extraConnections: 6
+  totalRooms: 10
+  extraConnections: 10
   maxJunctions: 3
   minCorridorLength: 10
   seed: -1
@@ -326,10 +325,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0
-    y: 0.05464481
-    width: 0.27072757
-    height: 0.32786885
+    x: 0.05983494
+    y: 0.17213115
+    width: 0.88033015
+    height: 0.6557377
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34

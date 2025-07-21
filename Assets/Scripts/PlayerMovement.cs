@@ -9,32 +9,44 @@ public class PlayerMovement : MonoBehaviour
     private Rigidbody2D rb;
     private Animator animator;
     private Vector2 moveInput;
+    private Vector2 lastMoveDirection;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
+        lastMoveDirection = new Vector2(0, -1); // Default to facing down
     }
 
     void Update()
     {
-        // Get Input
-        moveInput.x = Input.GetAxisRaw("Horizontal");
-        moveInput.y = Input.GetAxisRaw("Vertical");
+        // Read input
+        float inputX = Input.GetAxisRaw("Horizontal");
+        float inputY = Input.GetAxisRaw("Vertical");
 
-        // Prevent diagonal speed boost
-        moveInput = moveInput.normalized;
-
-        // Set AnimState for Animator
-        int animState = 0; // Idle
-        if (moveInput.sqrMagnitude > 0.01f)
+        // Prioritize vertical over horizontal if both pressed
+        if (Mathf.Abs(inputX) > Mathf.Abs(inputY))
         {
-            if (Mathf.Abs(moveInput.x) > Mathf.Abs(moveInput.y))
-                animState = (moveInput.x > 0) ? 4 : 3; // 4 = right, 3 = left
-            else
-                animState = (moveInput.y > 0) ? 2 : 1; // 2 = up, 1 = down
+            inputY = 0;
         }
-        animator.SetInteger("AnimState", animState);
+        else if (Mathf.Abs(inputY) > Mathf.Abs(inputX))
+        {
+            inputX = 0;
+        }
+
+        moveInput = new Vector2(inputX, inputY).normalized;
+
+        bool isMoving = moveInput.sqrMagnitude > 0.01f;
+        animator.SetBool("IsMoving", isMoving);
+
+        if (isMoving)
+        {
+            lastMoveDirection = moveInput;
+        }
+
+        // Set direction for both idle and walk
+        animator.SetFloat("MoveX", lastMoveDirection.x);
+        animator.SetFloat("MoveY", lastMoveDirection.y);
     }
 
     void FixedUpdate()
