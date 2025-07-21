@@ -4,37 +4,37 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    public float moveSpeed = 5f;
+    [Header("Movement Speeds")]
+    public float walkSpeed = 2f;
+    public float quickSpeed = 3.5f;
 
     private Rigidbody2D rb;
     private Animator animator;
     private Vector2 moveInput;
     private Vector2 lastMoveDirection;
+    private float currentSpeed;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
-        lastMoveDirection = new Vector2(0, -1); // Default to facing down
+        lastMoveDirection = new Vector2(0, -1); // Default facing down
     }
 
     void Update()
     {
-        // Read input
+        // Input
         float inputX = Input.GetAxisRaw("Horizontal");
         float inputY = Input.GetAxisRaw("Vertical");
 
-        // Prioritize vertical over horizontal if both pressed
-        if (Mathf.Abs(inputX) > Mathf.Abs(inputY))
-        {
-            inputY = 0;
-        }
-        else if (Mathf.Abs(inputY) > Mathf.Abs(inputX))
-        {
-            inputX = 0;
-        }
+        // Prioritise axis to prevent diagonals sticking
+        if (Mathf.Abs(inputX) > Mathf.Abs(inputY)) inputY = 0;
+        else if (Mathf.Abs(inputY) > Mathf.Abs(inputX)) inputX = 0;
 
         moveInput = new Vector2(inputX, inputY).normalized;
+
+        // Toggle between speeds
+        currentSpeed = Input.GetKey(KeyCode.LeftShift) ? quickSpeed : walkSpeed;
 
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
         animator.SetBool("IsMoving", isMoving);
@@ -44,13 +44,12 @@ public class PlayerMovement : MonoBehaviour
             lastMoveDirection = moveInput;
         }
 
-        // Set direction for both idle and walk
         animator.SetFloat("MoveX", lastMoveDirection.x);
         animator.SetFloat("MoveY", lastMoveDirection.y);
     }
 
     void FixedUpdate()
     {
-        rb.MovePosition(rb.position + moveInput * moveSpeed * Time.fixedDeltaTime);
+        rb.MovePosition(rb.position + moveInput * currentSpeed * Time.fixedDeltaTime);
     }
 }
