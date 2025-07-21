@@ -21,6 +21,7 @@ public class RuinGenerator : MonoBehaviour
 
     [Header("Scene References")]
     public Transform ruinContainer;
+    public GameObject playerPrefab;  // Assign your Player prefab here in the Inspector
 
     // Internal generation state
     private List<GameObject> placedRooms = new List<GameObject>();
@@ -56,6 +57,17 @@ public class RuinGenerator : MonoBehaviour
         startRoom.transform.position = Vector3.zero;
         placedRooms.Add(startRoom);
         MarkOccupiedCells(currentGridPos, startSize, startRoom);
+
+        // ---- Player Spawn Logic ----
+        Transform playerSpawn = startRoom.transform.Find("Player_Spawn");
+        if (playerSpawn != null && playerPrefab != null)
+        {
+            Instantiate(playerPrefab, playerSpawn.position, Quaternion.identity);
+        }
+        else
+        {
+            Debug.LogWarning("Player spawn point or prefab not found!");
+        }
 
         int placed = 1;
         int safetyCounter = 0;
