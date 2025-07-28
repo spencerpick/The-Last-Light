@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 3661966625233564691}
   m_Layer: 0
   m_Name: Bones_Pivot
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -40,6 +40,26 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3661966625233564691}
     m_Modifications:
+    - target: {fileID: 612221998469373599, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1571547787816220442, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1591654468778757632, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3185237810830938135, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4754475739666080833, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 4850335948752006269, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
       propertyPath: m_LocalPosition.x
       value: -12.875
@@ -80,9 +100,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5043451738993708873, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5191888935642394521, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 6512577838794503420, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
       propertyPath: m_Name
       value: Bones
+      objectReference: {fileID: 0}
+    - target: {fileID: 8754506217370698653, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

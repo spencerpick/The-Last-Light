@@ -197,20 +197,33 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   starterRoomPrefab: {fileID: 8436021003597613976, guid: fde54186573f4e944bbdcb4e32734616, type: 3}
   roomPrefabs:
-  - {fileID: 8538507913519116581, guid: 246503efbab23164ab3f082568d25476, type: 3}
   - {fileID: 2301053307580042512, guid: 6a3b0893a67025a42950230726c05bf1, type: 3}
-  - {fileID: 1497774974633293288, guid: d1bc1c5e14001914fbd265bcddd2aa8a, type: 3}
+  - {fileID: 8538507913519116581, guid: 246503efbab23164ab3f082568d25476, type: 3}
   - {fileID: 4024428208146005430, guid: d2042f8814b4b4349869c7fd9f422e86, type: 3}
+  - {fileID: 1497774974633293288, guid: d1bc1c5e14001914fbd265bcddd2aa8a, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
   totalRooms: 10
-  extraConnections: 10
-  maxJunctions: 3
-  minCorridorLength: 10
+  extraConnections: 0
+  maxJunctions: 0
+  minCorridorLength: 6
   seed: -1
   actualSeedUsed: 0
-  ruinContainer: {fileID: 861627781}
-  playerPrefab: {fileID: 2210471384161370293, guid: a2526657ad80f8745b95db75a70b32f4, type: 3}
+  ruinContainer: {fileID: 0}
+  playerPrefab: {fileID: 0}
+  roomTypeDefinitions:
+  - type: Tomb
+    minCount: 2
+    maxCount: 0
+    weight: 2
+  - type: Ritual
+    minCount: 1
+    maxCount: 1
+    weight: 0
+  - type: Enemy
+    minCount: 1
+    maxCount: 0
+    weight: 3
 --- !u!4 &276941684
 Transform:
   m_ObjectHideFlags: 0
@@ -326,10 +339,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0.06834532
-    y: 0.008196721
-    width: 0.8633094
-    height: 0.9836066
+    x: 0
+    y: 0.05464481
+    width: 0.2877698
+    height: 0.32786885
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34

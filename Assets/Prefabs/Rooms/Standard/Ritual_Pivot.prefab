@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 5730285873784010598}
   m_Layer: 0
   m_Name: Ritual_Pivot
-  m_TagString: Untagged
+  m_TagString: Ritual
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -40,6 +40,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 5730285873784010598}
     m_Modifications:
+    - target: {fileID: 932215010737150779, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1709132171230058490, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1751856249810241253, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 2332113909624095434, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
       propertyPath: m_LocalPosition.x
       value: -13
@@ -80,17 +92,45 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2898445133769612265, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4368730459661220782, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4520308978884043094, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5237647604551957832, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5515198053811676711, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
     - target: {fileID: 6094462347504613785, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
-      propertyPath: m_IsActive
-      value: 1
+      propertyPath: m_Layer
+      value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 6198902185594374102, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
       propertyPath: m_Name
       value: Ritual
       objectReference: {fileID: 0}
+    - target: {fileID: 6815129650087872533, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 6910197861602974971, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
-      propertyPath: m_IsActive
-      value: 1
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 7941790259094651810, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
