@@ -1,4 +1,4 @@
-﻿// FULL RuinGenerator.cs – FORBIDDEN ADJACENCY FULL EDGE CHECK SUPPORT
+﻿// FULL RuinGenerator.cs – FORBIDDEN ADJACENCY: CONNECTION CHECK ONLY
 
 using System;
 using System.Collections;
@@ -131,47 +131,6 @@ public class RuinGenerator : MonoBehaviour
         return false;
     }
 
-    // The magic: checks ALL edge cells of candidate room for forbidden neighbors
-    bool HasForbiddenNeighbor(Vector2Int candidateOrigin, Vector2Int size, string candidateType)
-    {
-        foreach (var dir in directions)
-        {
-            List<Vector2Int> edgeCells = GetEdgeCells(candidateOrigin, size, dir);
-            foreach (var cell in edgeCells)
-            {
-                Vector2Int neighbor = cell + dir;
-                if (gridOccupancyMap.TryGetValue(neighbor, out GameObject neighborObj))
-                {
-                    if (roomToGridOrigin.ContainsKey(neighborObj))
-                    {
-                        string neighborType = neighborObj.tag;
-                        if (IsForbiddenAdjacent(candidateType, neighborType))
-                        {
-                            // Debug.Log($"Blocked: {candidateType} at {candidateOrigin} has forbidden neighbor {neighborType} at {neighbor}");
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    // Gets all grid cells along a specific edge of a room
-    List<Vector2Int> GetEdgeCells(Vector2Int origin, Vector2Int size, Vector2Int direction)
-    {
-        List<Vector2Int> edge = new List<Vector2Int>();
-        if (direction == Vector2Int.up)
-            for (int x = 0; x < size.x; x++) edge.Add(new Vector2Int(origin.x + x, origin.y + size.y - 1));
-        else if (direction == Vector2Int.down)
-            for (int x = 0; x < size.x; x++) edge.Add(new Vector2Int(origin.x + x, origin.y));
-        else if (direction == Vector2Int.left)
-            for (int y = 0; y < size.y; y++) edge.Add(new Vector2Int(origin.x, origin.y + y));
-        else if (direction == Vector2Int.right)
-            for (int y = 0; y < size.y; y++) edge.Add(new Vector2Int(origin.x + size.x - 1, origin.y + y));
-        return edge;
-    }
-
     void GenerateRuin()
     {
         GameObject startRoom = Instantiate(starterRoomPrefab, ruinContainer);
@@ -260,10 +219,13 @@ public class RuinGenerator : MonoBehaviour
                         continue;
                     }
 
-                    // FULL EDGE ADJACENCY CHECK
-                    if (HasForbiddenNeighbor(proposedNextGridOrigin, newRoomSize, tryType))
+                    // -- FORBIDDEN CONNECTION CHECK: Only via direct corridor connection
+                    string fromRoomType = currentRoom.tag; // room we are extending from
+                    string toRoomType = tryType;           // room we want to place
+                    if (IsForbiddenAdjacent(fromRoomType, toRoomType))
                     {
                         Destroy(tempRoom);
+                        // Debug.Log($"Forbidden connection: {fromRoomType} -> {toRoomType}");
                         continue;
                     }
 
@@ -355,6 +317,12 @@ public class RuinGenerator : MonoBehaviour
                         bool pathClear = CheckCorridorPathClear(fromAnchor.position, toAnchor.position, profileA.gridUnitSize, roomA, roomB);
                         if (pathClear)
                         {
+                            // -- Check forbidden adjacency for extra connection as well
+                            string typeA = roomA.tag;
+                            string typeB = roomB.tag;
+                            if (IsForbiddenAdjacent(typeA, typeB))
+                                continue;
+
                             CreateCorridorBetweenAnchors(fromAnchor, toAnchor, dir, profileA.gridUnitSize);
                             DisableDoorAtAnchor(roomA, DirectionToDoorName(dir));
                             DisableDoorAtAnchor(roomB, DirectionToDoorName(-dir));
