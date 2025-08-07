@@ -1,4 +1,5 @@
-﻿// FULL RuinGenerator.cs – STRONG MAXCOUNT ENFORCEMENT
+﻿// FULL RuinGenerator.cs – FORBIDDEN ADJACENCY FULL EDGE CHECK SUPPORT
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -12,6 +13,13 @@ public class RoomTypeDefinition
     public int minCount;
     public int maxCount = -1;
     public float weight;
+}
+
+[Serializable]
+public struct ForbiddenAdjacency
+{
+    public string typeA;
+    public string typeB;
 }
 
 public class RuinGenerator : MonoBehaviour
@@ -36,6 +44,9 @@ public class RuinGenerator : MonoBehaviour
     [Header("Room Type Settings")]
     public List<RoomTypeDefinition> roomTypeDefinitions;
 
+    [Header("Adjacency Rules")]
+    public List<ForbiddenAdjacency> forbiddenAdjacencies;
+
     private List<GameObject> placedRooms = new List<GameObject>();
     private Dictionary<Vector2Int, GameObject> gridOccupancyMap = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<GameObject, Vector2Int> roomToGridOrigin = new Dictionary<GameObject, Vector2Int>();
@@ -48,7 +59,6 @@ public class RuinGenerator : MonoBehaviour
         new Vector2Int(-1, 0),
     };
 
-    // Track counts
     private Dictionary<string, int> placedTypeCounts = new Dictionary<string, int>();
     private List<string> plannedRoomTypes = new List<string>();
 
@@ -72,14 +82,12 @@ public class RuinGenerator : MonoBehaviour
             Debug.LogError($"totalRooms ({totalRooms}) is less than sum of minCounts ({totalMin})");
             return;
         }
-        // Fill min
         foreach (var def in roomTypeDefinitions)
         {
             placedTypeCounts[def.type] = 0;
             for (int i = 0; i < def.minCount; i++)
                 plannedRoomTypes.Add(def.type);
         }
-        // Fill remainder with weighted
         int remaining = totalRooms - totalMin;
         for (int i = 0; i < remaining; i++)
         {
@@ -100,18 +108,68 @@ public class RuinGenerator : MonoBehaviour
                 }
             }
         }
-        // Shuffle for randomness
         Shuffle(plannedRoomTypes);
         Debug.Log("Planned Room Types: " + string.Join(", ", plannedRoomTypes));
     }
 
-    // Returns null if no valid type left
     GameObject GetRandomRoomPrefabForType(string type)
     {
         var matching = roomPrefabs.Where(p => p.CompareTag(type)).ToList();
         if (matching.Count > 0)
             return matching[UnityEngine.Random.Range(0, matching.Count)];
         return null;
+    }
+
+    bool IsForbiddenAdjacent(string typeA, string typeB)
+    {
+        foreach (var pair in forbiddenAdjacencies)
+        {
+            if ((pair.typeA == typeA && pair.typeB == typeB) ||
+                (pair.typeA == typeB && pair.typeB == typeA))
+                return true;
+        }
+        return false;
+    }
+
+    // The magic: checks ALL edge cells of candidate room for forbidden neighbors
+    bool HasForbiddenNeighbor(Vector2Int candidateOrigin, Vector2Int size, string candidateType)
+    {
+        foreach (var dir in directions)
+        {
+            List<Vector2Int> edgeCells = GetEdgeCells(candidateOrigin, size, dir);
+            foreach (var cell in edgeCells)
+            {
+                Vector2Int neighbor = cell + dir;
+                if (gridOccupancyMap.TryGetValue(neighbor, out GameObject neighborObj))
+                {
+                    if (roomToGridOrigin.ContainsKey(neighborObj))
+                    {
+                        string neighborType = neighborObj.tag;
+                        if (IsForbiddenAdjacent(candidateType, neighborType))
+                        {
+                            // Debug.Log($"Blocked: {candidateType} at {candidateOrigin} has forbidden neighbor {neighborType} at {neighbor}");
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // Gets all grid cells along a specific edge of a room
+    List<Vector2Int> GetEdgeCells(Vector2Int origin, Vector2Int size, Vector2Int direction)
+    {
+        List<Vector2Int> edge = new List<Vector2Int>();
+        if (direction == Vector2Int.up)
+            for (int x = 0; x < size.x; x++) edge.Add(new Vector2Int(origin.x + x, origin.y + size.y - 1));
+        else if (direction == Vector2Int.down)
+            for (int x = 0; x < size.x; x++) edge.Add(new Vector2Int(origin.x + x, origin.y));
+        else if (direction == Vector2Int.left)
+            for (int y = 0; y < size.y; y++) edge.Add(new Vector2Int(origin.x, origin.y + y));
+        else if (direction == Vector2Int.right)
+            for (int y = 0; y < size.y; y++) edge.Add(new Vector2Int(origin.x + size.x - 1, origin.y + y));
+        return edge;
     }
 
     void GenerateRuin()
@@ -155,8 +213,6 @@ public class RuinGenerator : MonoBehaviour
 
         int placedCount = 1;
         int safetyCounter = 0;
-
-        // Track which room types have already hit their max
         List<string> remainingTypes = new List<string>(plannedRoomTypes);
 
         while (placedCount < totalRooms && safetyCounter < 1000)
@@ -164,22 +220,16 @@ public class RuinGenerator : MonoBehaviour
             safetyCounter++;
             GameObject currentRoom = placedRooms[UnityEngine.Random.Range(0, placedRooms.Count)];
             RoomProfile currentProfile = currentRoom.GetComponentInChildren<RoomProfile>();
-            if (currentProfile == null)
-            {
-                Debug.LogWarning($"Current room {currentRoom.name} lost its RoomProfile. Skipping.");
-                continue;
-            }
+            if (currentProfile == null) continue;
             Vector2Int currentRoomGridOrigin = GetRoomGridOrigin(currentRoom);
 
             List<Vector2Int> dirList = new List<Vector2Int>(directions);
             Shuffle(dirList);
             bool placedRoomThisIteration = false;
 
-            // --- Try all types, skipping maxed out ---
             List<string> candidateTypes = roomTypeDefinitions
                 .Where(def => def.maxCount == -1 || placedTypeCounts[def.type] < def.maxCount)
                 .Select(def => def.type).ToList();
-
             Shuffle(candidateTypes);
 
             foreach (Vector2Int direction in dirList)
@@ -191,21 +241,12 @@ public class RuinGenerator : MonoBehaviour
 
                     GameObject tempRoom = Instantiate(newRoomPrefab);
                     RoomProfile tempProfile = tempRoom.GetComponentInChildren<RoomProfile>();
-                    if (tempProfile == null)
-                    {
-                        Destroy(tempRoom);
-                        continue;
-                    }
+                    if (tempProfile == null) { Destroy(tempRoom); continue; }
                     Vector2Int newRoomSize = tempProfile.size;
 
                     Transform currentRoomExitAnchor = FindAnchor(currentRoom, DirectionToAnchorName(direction));
                     Transform newRoomEntryAnchor = FindAnchor(tempRoom, DirectionToAnchorName(-direction));
-
-                    if (currentRoomExitAnchor == null || newRoomEntryAnchor == null)
-                    {
-                        Destroy(tempRoom);
-                        continue;
-                    }
+                    if (currentRoomExitAnchor == null || newRoomEntryAnchor == null) { Destroy(tempRoom); continue; }
 
                     tempRoom.transform.position = Vector3.zero;
                     Vector3 offsetFromPivotToAnchor = newRoomEntryAnchor.position;
@@ -219,7 +260,13 @@ public class RuinGenerator : MonoBehaviour
                         continue;
                     }
 
-                    // --- Only increment count on successful placement! ---
+                    // FULL EDGE ADJACENCY CHECK
+                    if (HasForbiddenNeighbor(proposedNextGridOrigin, newRoomSize, tryType))
+                    {
+                        Destroy(tempRoom);
+                        continue;
+                    }
+
                     GameObject newRoom = Instantiate(newRoomPrefab, ruinContainer);
                     newRoom.transform.position = proposedNewRoomWorldPos;
 
@@ -241,11 +288,10 @@ public class RuinGenerator : MonoBehaviour
 
                     placedCount++;
                     placedRoomThisIteration = true;
-                    break; // break out of types
+                    break;
                 }
-                if (placedRoomThisIteration) break; // break out of dirs
+                if (placedRoomThisIteration) break;
             }
-
             if (!placedRoomThisIteration)
             {
                 Debug.Log($"Failed to place a room from {currentRoom.name} in any direction. Retrying.");
@@ -281,7 +327,6 @@ public class RuinGenerator : MonoBehaviour
                 {
                     Transform fromAnchor = FindAnchor(roomA, DirectionToAnchorName(dir));
                     Transform toAnchor = FindAnchor(roomB, DirectionToAnchorName(-dir));
-
                     if (fromAnchor == null || toAnchor == null) continue;
 
                     float tolerance = 0.1f * profileA.gridUnitSize;
@@ -432,7 +477,6 @@ public class RuinGenerator : MonoBehaviour
     {
         if (roomToGridOrigin.TryGetValue(room, out Vector2Int origin))
             return origin;
-
         Debug.LogError($"Room {room.name} not found in roomToGridOrigin!");
         return Vector2Int.zero;
     }

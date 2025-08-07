@@ -209,21 +209,24 @@ MonoBehaviour:
   minCorridorLength: 6
   seed: -1
   actualSeedUsed: 0
-  ruinContainer: {fileID: 0}
-  playerPrefab: {fileID: 0}
+  ruinContainer: {fileID: 861627781}
+  playerPrefab: {fileID: 2210471384161370293, guid: a2526657ad80f8745b95db75a70b32f4, type: 3}
   roomTypeDefinitions:
   - type: Tomb
     minCount: 2
-    maxCount: 0
-    weight: 2
+    maxCount: -1
+    weight: 1
   - type: Ritual
     minCount: 1
     maxCount: 1
     weight: 0
   - type: Enemy
     minCount: 1
-    maxCount: 0
+    maxCount: -1
     weight: 3
+  forbiddenAdjacencies:
+  - typeA: Tomb
+    typeB: Ritual
 --- !u!4 &276941684
 Transform:
   m_ObjectHideFlags: 0
@@ -339,10 +342,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0
-    y: 0.05464481
-    width: 0.2877698
-    height: 0.32786885
+    x: 0.07409051
+    y: 0.015260324
+    width: 0.85181904
+    height: 0.9694794
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34
