@@ -61,6 +61,10 @@ public class RuinGenerator : MonoBehaviour
 
     private Dictionary<string, int> placedTypeCounts = new Dictionary<string, int>();
     private List<string> plannedRoomTypes = new List<string>();
+    // Queue-like list that we will consume from while building the ruin. It is a shuffled
+    // multiset that includes each type's minimum requirements plus the weighted remainder.
+    // We will remove one occurrence when we successfully place a room of that type.
+    private List<string> remainingPlannedTypes = new List<string>();
 
     void Start()
     {
@@ -74,6 +78,7 @@ public class RuinGenerator : MonoBehaviour
     void PreparePlannedRoomTypes()
     {
         plannedRoomTypes.Clear();
+        remainingPlannedTypes.Clear();
         placedTypeCounts.Clear();
 
         int totalMin = roomTypeDefinitions.Sum(r => r.minCount);
@@ -109,6 +114,7 @@ public class RuinGenerator : MonoBehaviour
             }
         }
         Shuffle(plannedRoomTypes);
+        remainingPlannedTypes = new List<string>(plannedRoomTypes);
         Debug.Log("Planned Room Types: " + string.Join(", ", plannedRoomTypes));
     }
 
@@ -172,98 +178,210 @@ public class RuinGenerator : MonoBehaviour
 
         int placedCount = 1;
         int safetyCounter = 0;
-        List<string> remainingTypes = new List<string>(plannedRoomTypes);
 
-        while (placedCount < totalRooms && safetyCounter < 1000)
+        // Phase-aware placement that guarantees minCount while still respecting adjacency.
+        while (placedCount < totalRooms && safetyCounter < 5000)
         {
             safetyCounter++;
-            GameObject currentRoom = placedRooms[UnityEngine.Random.Range(0, placedRooms.Count)];
-            RoomProfile currentProfile = currentRoom.GetComponentInChildren<RoomProfile>();
-            if (currentProfile == null) continue;
-            Vector2Int currentRoomGridOrigin = GetRoomGridOrigin(currentRoom);
 
-            List<Vector2Int> dirList = new List<Vector2Int>(directions);
-            Shuffle(dirList);
+            // Recompute which types are still required by minCount.
+            List<string> requiredLeft = new List<string>();
+            foreach (var def in roomTypeDefinitions)
+            {
+                int remaining = Mathf.Max(0, def.minCount - (placedTypeCounts.ContainsKey(def.type) ? placedTypeCounts[def.type] : 0));
+                for (int i = 0; i < remaining; i++) requiredLeft.Add(def.type);
+            }
+            Shuffle(requiredLeft);
+
+            int remainingSlots = totalRooms - placedCount;
             bool placedRoomThisIteration = false;
 
-            List<string> candidateTypes = roomTypeDefinitions
-                .Where(def => def.maxCount == -1 || placedTypeCounts[def.type] < def.maxCount)
-                .Select(def => def.type).ToList();
-            Shuffle(candidateTypes);
-
-            foreach (Vector2Int direction in dirList)
+            // 1) If we still owe required types, try to place one of them first, scanning all anchors.
+            if (requiredLeft.Count > 0)
             {
-                foreach (string tryType in candidateTypes)
+                placedRoomThisIteration = TryPlaceAnyOfTypes(requiredLeft, true);
+                if (!placedRoomThisIteration && requiredLeft.Count >= remainingSlots)
                 {
-                    GameObject newRoomPrefab = GetRandomRoomPrefabForType(tryType);
-                    if (newRoomPrefab == null) continue;
-
-                    GameObject tempRoom = Instantiate(newRoomPrefab);
-                    RoomProfile tempProfile = tempRoom.GetComponentInChildren<RoomProfile>();
-                    if (tempProfile == null) { Destroy(tempRoom); continue; }
-                    Vector2Int newRoomSize = tempProfile.size;
-
-                    Transform currentRoomExitAnchor = FindAnchor(currentRoom, DirectionToAnchorName(direction));
-                    Transform newRoomEntryAnchor = FindAnchor(tempRoom, DirectionToAnchorName(-direction));
-                    if (currentRoomExitAnchor == null || newRoomEntryAnchor == null) { Destroy(tempRoom); continue; }
-
-                    tempRoom.transform.position = Vector3.zero;
-                    Vector3 offsetFromPivotToAnchor = newRoomEntryAnchor.position;
-                    Vector3 desiredNewRoomEntryAnchorWorldPos = currentRoomExitAnchor.position + (Vector3)(Vector2)direction * minCorridorLength * tempProfile.gridUnitSize;
-                    Vector3 proposedNewRoomWorldPos = desiredNewRoomEntryAnchorWorldPos - offsetFromPivotToAnchor;
-                    Vector2Int proposedNextGridOrigin = GridOriginFromWorldPos(proposedNewRoomWorldPos, tempProfile.gridUnitSize);
-
-                    if (!CanPlaceRoom(proposedNextGridOrigin, newRoomSize))
-                    {
-                        Destroy(tempRoom);
-                        continue;
-                    }
-
-                    // -- FORBIDDEN CONNECTION CHECK: Only via direct corridor connection
-                    string fromRoomType = currentRoom.tag; // room we are extending from
-                    string toRoomType = tryType;           // room we want to place
-                    if (IsForbiddenAdjacent(fromRoomType, toRoomType))
-                    {
-                        Destroy(tempRoom);
-                        // Debug.Log($"Forbidden connection: {fromRoomType} -> {toRoomType}");
-                        continue;
-                    }
-
-                    GameObject newRoom = Instantiate(newRoomPrefab, ruinContainer);
-                    newRoom.transform.position = proposedNewRoomWorldPos;
-
-                    placedRooms.Add(newRoom);
-                    roomToGridOrigin[newRoom] = proposedNextGridOrigin;
-                    MarkOccupiedCells(proposedNextGridOrigin, newRoomSize, newRoom);
-
-                    connectedPairs.Add((currentRoomGridOrigin, proposedNextGridOrigin));
-                    connectedPairs.Add((proposedNextGridOrigin, currentRoomGridOrigin));
-
-                    CreateCorridorBetweenAnchors(currentRoomExitAnchor, FindAnchor(newRoom, DirectionToAnchorName(-direction)), direction, newRoom.GetComponentInChildren<RoomProfile>().gridUnitSize);
-                    DisableDoorAtAnchor(currentRoom, DirectionToDoorName(direction));
-                    DisableDoorAtAnchor(newRoom, DirectionToDoorName(-direction));
-
-                    Destroy(tempRoom);
-
-                    placedTypeCounts[tryType] += 1;
-                    Debug.Log($"[PCG] Placed {tryType}: now {placedTypeCounts[tryType]} (max {roomTypeDefinitions.First(def => def.type == tryType).maxCount})");
-
-                    placedCount++;
-                    placedRoomThisIteration = true;
-                    break;
+                    // No slack left but cannot place any required type -> stop trying this layout
+                    // to avoid an endless loop. Regenerate with a new seed once.
+                    Debug.LogWarning("Could not place a required room type before running out of slots. Re-seeding and retrying generation.");
+                    CleanupGenerated();
+                    actualSeedUsed = seed >= 0 ? seed : System.Environment.TickCount + UnityEngine.Random.Range(0, int.MaxValue);
+                    UnityEngine.Random.InitState(actualSeedUsed);
+                    GenerateRuin();
+                    return;
                 }
-                if (placedRoomThisIteration) break;
             }
-            if (!placedRoomThisIteration)
+
+            // 2) If no required type was placed, place a planned/optional type.
+            if (!placedRoomThisIteration && placedCount < totalRooms)
             {
-                Debug.Log($"Failed to place a room from {currentRoom.name} in any direction. Retrying.");
-                continue;
+                if (remainingPlannedTypes.Count > 0)
+                {
+                    // Filter out types that already reached their maxCount.
+                    var usable = remainingPlannedTypes.Where(t =>
+                    {
+                        var def = roomTypeDefinitions.First(d => d.type == t);
+                        return def.maxCount == -1 || placedTypeCounts[t] < def.maxCount;
+                    }).ToList();
+                    if (usable.Count == 0)
+                    {
+                        // Fallback to any candidate obeying maxCount.
+                        usable = roomTypeDefinitions
+                            .Where(def => def.maxCount == -1 || placedTypeCounts[def.type] < def.maxCount)
+                            .Select(def => def.type).ToList();
+                    }
+                    placedRoomThisIteration = TryPlaceAnyOfTypes(usable, true);
+                }
+                else
+                {
+                    var anyCandidates = roomTypeDefinitions
+                        .Where(def => def.maxCount == -1 || placedTypeCounts[def.type] < def.maxCount)
+                        .Select(def => def.type).ToList();
+                    placedRoomThisIteration = TryPlaceAnyOfTypes(anyCandidates, false);
+                }
+            }
+
+            if (placedRoomThisIteration)
+            {
+                placedCount++;
+            }
+            else
+            {
+                // Could not place any room this iteration – try again (different order/anchors next time).
+                Debug.Log("Failed to place a room this iteration. Retrying.");
             }
         }
 
         AddExtraConnections();
         Debug.Log($"Placed {placedCount} rooms (attempts: {safetyCounter})");
         Debug.Log("Final room type counts: " + string.Join(", ", placedTypeCounts.Select(kv => $"{kv.Key}:{kv.Value}")));
+    }
+
+    // Try to place a room of one of the provided types. Types are treated as a priority list;
+    // we randomize rooms and directions but keep the given type ordering. If removeFromPlan is
+    // true and we manage to place a type that exists in remainingPlannedTypes, remove one
+    // occurrence so the plan is consumed.
+    bool TryPlaceAnyOfTypes(List<string> typePriorityList, bool removeFromPlan)
+    {
+        if (typePriorityList == null || typePriorityList.Count == 0) return false;
+
+        // Iterate rooms in random order to increase coverage.
+        List<GameObject> baseRooms = new List<GameObject>(placedRooms);
+        Shuffle(baseRooms);
+
+        foreach (string tryType in typePriorityList)
+        {
+            // Respect maxCount early.
+            var def = roomTypeDefinitions.FirstOrDefault(d => d.type == tryType);
+            if (def.maxCount != -1 && placedTypeCounts[tryType] >= def.maxCount) continue;
+
+            if (TryPlaceRoomOfTypeFromAnyAnchor(baseRooms, tryType, out Vector2Int fromOrigin, out Vector2Int toOrigin))
+            {
+                // Consume from plan when requested
+                if (removeFromPlan)
+                {
+                    int idx = remainingPlannedTypes.IndexOf(tryType);
+                    if (idx >= 0) remainingPlannedTypes.RemoveAt(idx);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool TryPlaceRoomOfTypeFromAnyAnchor(List<GameObject> baseRooms, string tryType, out Vector2Int usedFromOrigin, out Vector2Int usedToOrigin)
+    {
+        usedFromOrigin = Vector2Int.zero;
+        usedToOrigin = Vector2Int.zero;
+
+        foreach (GameObject currentRoom in baseRooms)
+        {
+            string fromRoomType = currentRoom.tag;
+            if (IsForbiddenAdjacent(fromRoomType, tryType))
+                continue; // This base room cannot connect to the target type at all
+
+            RoomProfile currentProfile = currentRoom.GetComponentInChildren<RoomProfile>();
+            if (currentProfile == null) continue;
+            Vector2Int currentRoomGridOrigin = GetRoomGridOrigin(currentRoom);
+
+            List<Vector2Int> dirList = new List<Vector2Int>(directions);
+            Shuffle(dirList);
+
+            foreach (Vector2Int direction in dirList)
+            {
+                GameObject newRoomPrefab = GetRandomRoomPrefabForType(tryType);
+                if (newRoomPrefab == null) continue;
+
+                GameObject tempRoom = Instantiate(newRoomPrefab);
+                RoomProfile tempProfile = tempRoom.GetComponentInChildren<RoomProfile>();
+                if (tempProfile == null) { Destroy(tempRoom); continue; }
+                Vector2Int newRoomSize = tempProfile.size;
+
+                Transform currentRoomExitAnchor = FindAnchor(currentRoom, DirectionToAnchorName(direction));
+                Transform newRoomEntryAnchor = FindAnchor(tempRoom, DirectionToAnchorName(-direction));
+                if (currentRoomExitAnchor == null || newRoomEntryAnchor == null) { Destroy(tempRoom); continue; }
+
+                tempRoom.transform.position = Vector3.zero;
+                Vector3 offsetFromPivotToAnchor = newRoomEntryAnchor.position;
+                Vector3 desiredNewRoomEntryAnchorWorldPos = currentRoomExitAnchor.position + (Vector3)(Vector2)direction * tempProfile.gridUnitSize * minCorridorLength;
+                Vector3 proposedNewRoomWorldPos = desiredNewRoomEntryAnchorWorldPos - offsetFromPivotToAnchor;
+                Vector2Int proposedNextGridOrigin = GridOriginFromWorldPos(proposedNewRoomWorldPos, tempProfile.gridUnitSize);
+
+                if (!CanPlaceRoom(proposedNextGridOrigin, newRoomSize))
+                {
+                    Destroy(tempRoom);
+                    continue;
+                }
+
+                // Forbidden adjacency check already pruned by base room type gate above but
+                // keep it here for safety in case rules change.
+                if (IsForbiddenAdjacent(fromRoomType, tryType))
+                {
+                    Destroy(tempRoom);
+                    continue;
+                }
+
+                GameObject newRoom = Instantiate(newRoomPrefab, ruinContainer);
+                newRoom.transform.position = proposedNewRoomWorldPos;
+
+                placedRooms.Add(newRoom);
+                roomToGridOrigin[newRoom] = proposedNextGridOrigin;
+                MarkOccupiedCells(proposedNextGridOrigin, newRoomSize, newRoom);
+
+                connectedPairs.Add((currentRoomGridOrigin, proposedNextGridOrigin));
+                connectedPairs.Add((proposedNextGridOrigin, currentRoomGridOrigin));
+
+                CreateCorridorBetweenAnchors(currentRoomExitAnchor, FindAnchor(newRoom, DirectionToAnchorName(-direction)), direction, newRoom.GetComponentInChildren<RoomProfile>().gridUnitSize);
+                DisableDoorAtAnchor(currentRoom, DirectionToDoorName(direction));
+                DisableDoorAtAnchor(newRoom, DirectionToDoorName(-direction));
+
+                Destroy(tempRoom);
+
+                placedTypeCounts[tryType] += 1;
+                Debug.Log($"[PCG] Placed {tryType}: now {placedTypeCounts[tryType]} (max {roomTypeDefinitions.First(def => def.type == tryType).maxCount})");
+
+                usedFromOrigin = currentRoomGridOrigin;
+                usedToOrigin = proposedNextGridOrigin;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Clears any generated state from a failed attempt so we can try again safely.
+    void CleanupGenerated()
+    {
+        foreach (Transform child in ruinContainer)
+        {
+            DestroyImmediate(child.gameObject);
+        }
+        placedRooms.Clear();
+        gridOccupancyMap.Clear();
+        roomToGridOrigin.Clear();
+        connectedPairs.Clear();
+        placedTypeCounts.Clear();
+        remainingPlannedTypes = new List<string>(plannedRoomTypes);
     }
 
     void AddExtraConnections()
