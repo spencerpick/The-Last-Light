@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4815149098089897742}
   m_Layer: 0
   m_Name: Overgrown_Pivot
-  m_TagString: Untagged
+  m_TagString: Overgrown
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

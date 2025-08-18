@@ -8,6 +8,9 @@ TagManager:
   - Tomb
   - Ritual
   - Treasure
+  - Overgrown
+  - Bones
+  - Library
   layers:
   - Default
   - TransparentFX
