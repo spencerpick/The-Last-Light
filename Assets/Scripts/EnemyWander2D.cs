@@ -12,16 +12,26 @@ public class EnemyWander2D : MonoBehaviour
     [SerializeField] float minIdle = 0.4f;
     [SerializeField] float maxIdle = 1.1f;
 
-    [Header("Radius bounds")]
+    [Header("Radius bias (soft, optional)")]
     [SerializeField] Transform home;                   // if null, uses start position
     [SerializeField] float wanderRadius = 4f;
     [Tooltip("Start biasing back to the centre after % of the radius.")]
     [SerializeField] float softBound = 0.8f;
 
+    [Header("Room bounds (hard)")]
+    [Tooltip("Collider that outlines the room (Box/Composite/etc). Keep as non-trigger.")]
+    [SerializeField] Collider2D roomBounds;
+    [Tooltip("How close to the bounds before we start preferring inward directions.")]
+    [SerializeField] float boundsWarnMargin = 0.25f;
+    [Tooltip("How far ahead we look when deciding if a step would leave the room.")]
+    [SerializeField] float boundsProbe = 0.6f;
+    [Tooltip("If true, snap the enemy back inside if it ever escapes the bounds.")]
+    [SerializeField] bool clampInsideBounds = true;
+
     [Header("Wall avoidance (uses collider shape-casts)")]
-    [SerializeField] LayerMask obstacleMask;           // set to your Walls layer(s)
+    [SerializeField] LayerMask obstacleMask;           // set to your Walls/Decor layers
     [SerializeField] float castDistance = 0.28f;       // how far ahead to cast the collider
-    [SerializeField] float castSideInset = 0.06f;      // fraction of collider half-size for side casts
+    [SerializeField] float castSideInset = 0.06f;      // fraction of collider half-size for side casts (note: central cast only with rb.Cast)
     [SerializeField] float turnCooldown = 0.15f;       // min time between turns
 
     [Header("Stuck detection")]
@@ -72,6 +82,8 @@ public class EnemyWander2D : MonoBehaviour
         SnapFace();
         segmentLeft = segmentDistance;
         lastPos = rb.position;
+
+        Physics2D.queriesStartInColliders = false;
     }
 
     /// <summary>Call right after you spawn him to make this room his “home”.</summary>
@@ -84,6 +96,10 @@ public class EnemyWander2D : MonoBehaviour
     void FixedUpdate()
     {
         Vector2 pos = rb.position;
+
+        // Optional: clamp back inside hard bounds if we ever slipped out
+        if (roomBounds && clampInsideBounds)
+            rb.position = ClampInsideRoom(rb.position);
 
         // Idle pause
         if (idleTimer > 0f)
@@ -108,12 +124,40 @@ public class EnemyWander2D : MonoBehaviour
             }
         }
 
+        // Hard room-bounds bias/turn: if we're close to the edge or next step exits, pick inward
+        if (roomBounds && Time.time - lastTurnTime > turnCooldown)
+        {
+            if (NearBounds(pos, boundsWarnMargin) || StepWouldExit(pos, currentDir))
+            {
+                Vector2 inward = InwardCardinal(pos);
+                // Try to go inward if it’s not directly blocked; else try a safe perpendicular that stays inside
+                if (inward != Vector2.zero && inward != -currentDir && !StepWouldExit(pos, inward))
+                {
+                    currentDir = inward;
+                    SnapFace();
+                    lastTurnTime = Time.time;
+                    segmentLeft = segmentDistance;
+                }
+                else
+                {
+                    // Pick a perpendicular that keeps us inside (fallback to reverse if needed)
+                    Vector2 perpa = (currentDir == Vector2.up || currentDir == Vector2.down) ? Vector2.left : Vector2.up;
+                    Vector2 perpb = -perpa;
+
+                    if (!StepWouldExit(pos, perpa)) { currentDir = perpa; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
+                    else if (!StepWouldExit(pos, perpb)) { currentDir = perpb; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
+                    else if (!StepWouldExit(pos, -currentDir)) { currentDir = -currentDir; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
+                    // else keep currentDir; we’ll rely on wall/stuck logic below
+                }
+            }
+        }
+
         // Advance along current segment
         float step = Mathf.Min(segmentLeft, moveSpeed * Time.fixedDeltaTime);
         segmentLeft -= step;
         desiredVel = currentDir * moveSpeed;
 
-        // Hard block check using the actual collider shape
+        // Hard block check using the actual collider shape (central cast via rb.Cast)
         if (BlockedAhead(pos, currentDir))
         {
             TurnOnBlock(pos);
@@ -144,7 +188,11 @@ public class EnemyWander2D : MonoBehaviour
         if (segmentLeft <= 0f)
         {
             segmentLeft = segmentDistance;
-            currentDir = ChooseNextCardinal(currentDir, pos);
+
+            // Choose next with a preference to stay inside the room if we have bounds
+            currentDir = roomBounds ? ChooseNextCardinalInside(currentDir, pos)
+                                    : ChooseNextCardinal(currentDir, pos);
+
             SnapFace();
             lastTurnTime = Time.time;
 
@@ -180,33 +228,14 @@ public class EnemyWander2D : MonoBehaviour
         faceVel = Vector2.zero;
     }
 
-    // ===== Shape-cast based blocking =====
+    // ===== Shape-cast based blocking (central shape cast via Rigidbody2D.Cast) =====
     bool BlockedAhead(Vector2 pos, Vector2 dir)
     {
-        if (CastFrom(pos, dir)) return true;
-
-        // side casts: offset by a fraction of the collider’s extents
-        Bounds b = col.bounds;
-        Vector2 sideAxis = (dir == Vector2.up || dir == Vector2.down) ? Vector2.right : Vector2.up;
-        float inset = castSideInset * ((dir == Vector2.up || dir == Vector2.down) ? b.extents.x : b.extents.y);
-
-        if (CastFrom(pos + sideAxis * inset, dir)) return true;
-        if (CastFrom(pos - sideAxis * inset, dir)) return true;
-
-        return false;
-    }
-
-    bool CastFrom(Vector2 origin, Vector2 dir)
-    {
-        // Rigidbody2D.Cast signature: (direction, ContactFilter2D, results[], distance)
-        // We move the body to the origin temporarily by using the rb.position for the cast.
-        // Note: Cast ignores the 'origin' parameter, it uses rb.position internally.
-        // To approximate origin we only need direction + distance here.
         int count = rb.Cast(dir, filter, hits, castDistance);
         return count > 0;
     }
 
-    // ===== Direction helpers =====
+    // ===== Direction helpers (no-bounds) =====
     static Vector2 RandomCardinal()
     {
         int r = Random.Range(0, 4);
@@ -238,23 +267,120 @@ public class EnemyWander2D : MonoBehaviour
         return -current; // fully boxed in
     }
 
+    // ===== Direction helpers (bounds-aware) =====
+    Vector2 ChooseNextCardinalInside(Vector2 current, Vector2 pos)
+    {
+        Vector2[] order = current == Vector2.up
+            ? new[] { Vector2.up, Vector2.left, Vector2.right, Vector2.down }
+            : current == Vector2.down
+                ? new[] { Vector2.down, Vector2.right, Vector2.left, Vector2.up }
+                : current == Vector2.left
+                    ? new[] { Vector2.left, Vector2.down, Vector2.up, Vector2.right }
+                    : new[] { Vector2.right, Vector2.up, Vector2.down, Vector2.left };
+
+        // 1) Prefer directions that DO NOT exit bounds
+        foreach (var d in order)
+            if (!StepWouldExit(pos, d) && !BlockedAhead(rb.position, d))
+                return d;
+
+        // 2) If everything would exit, prefer the inward cardinal
+        Vector2 inward = InwardCardinal(pos);
+        if (inward != Vector2.zero && !BlockedAhead(rb.position, inward))
+            return inward;
+
+        // 3) Fallback to normal logic
+        return ChooseNextCardinal(current, pos);
+    }
+
+    // ===== Bounds utilities =====
+    bool NearBounds(Vector2 pos, float margin)
+    {
+        if (!roomBounds) return false;
+        var b = roomBounds.bounds;
+        // Distance to each side
+        float left = (pos.x - b.min.x);
+        float right = (b.max.x - pos.x);
+        float down = (pos.y - b.min.y);
+        float up = (b.max.y - pos.y);
+        float minEdge = Mathf.Min(left, right, up, down);
+        return minEdge < margin;
+    }
+
+    bool StepWouldExit(Vector2 pos, Vector2 dir)
+    {
+        if (!roomBounds) return false;
+        Vector2 probe = pos + dir.normalized * boundsProbe;
+        return !roomBounds.bounds.Contains(probe);
+    }
+
+    Vector2 InwardCardinal(Vector2 pos)
+    {
+        if (!roomBounds) return Vector2.zero;
+        Vector2 towardCentre = (Vector2)roomBounds.bounds.center - pos;
+        return CardinalFromVector(towardCentre);
+    }
+
+    Vector2 ClampInsideRoom(Vector2 pos)
+    {
+        if (!roomBounds) return pos;
+
+        Bounds rbounds = roomBounds.bounds;
+        // respect our collider size so we don't clip into walls:
+        Vector2 ext = col.bounds.extents;
+
+        float clampedX = Mathf.Clamp(pos.x, rbounds.min.x + ext.x, rbounds.max.x - ext.x);
+        float clampedY = Mathf.Clamp(pos.y, rbounds.min.y + ext.y, rbounds.max.y - ext.y);
+        return new Vector2(clampedX, clampedY);
+    }
+
+    // ===== Turn on block =====
     void TurnOnBlock(Vector2 pos)
     {
         // prefer turning left/right over 180
-        Vector2 left  = (currentDir == Vector2.up || currentDir == Vector2.down) ? Vector2.left : Vector2.up;
+        Vector2 left = (currentDir == Vector2.up || currentDir == Vector2.down) ? Vector2.left : Vector2.up;
         Vector2 right = -left;
 
-        if (!BlockedAhead(pos, left))  { currentDir = left;  return; }
-        if (!BlockedAhead(pos, right)) { currentDir = right; return; }
+        // If bounds exist, prefer options that remain inside
+        if (roomBounds)
+        {
+            if (!StepWouldExit(pos, left)  && !BlockedAhead(pos, left)) { currentDir = left; return; }
+            if (!StepWouldExit(pos, right) && !BlockedAhead(pos, right)) { currentDir = right; return; }
+            if (!StepWouldExit(pos, -currentDir)) { currentDir = -currentDir; return; }
+        }
+        else
+        {
+            if (!BlockedAhead(pos, left)) { currentDir = left; return; }
+            if (!BlockedAhead(pos, right)) { currentDir = right; return; }
+        }
+
         currentDir = -currentDir;
     }
 
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
+        // Soft radius gizmo
         Gizmos.color = new Color(0f, 1f, 0f, 0.35f);
         Vector2 c = home ? (Vector2)home.position : (Vector2)transform.position;
-        Gizmos.DrawWireSphere(c, wanderRadius);
+        Gizmos.DrawWireSphere((Vector3)c, wanderRadius);
+
+        // Room bounds gizmo (margin + probe)
+        if (roomBounds)
+        {
+            var b = roomBounds.bounds;
+            Gizmos.color = new Color(1f, 0.6f, 0f, 0.25f);
+            // inner rectangle representing warn margin
+            var innerMin = new Vector3(b.min.x + boundsWarnMargin, b.min.y + boundsWarnMargin, 0f);
+            var innerMax = new Vector3(b.max.x - boundsWarnMargin, b.max.y - boundsWarnMargin, 0f);
+            Vector3 p1 = new Vector3(innerMin.x, innerMin.y, 0);
+            Vector3 p2 = new Vector3(innerMax.x, innerMin.y, 0);
+            Vector3 p3 = new Vector3(innerMax.x, innerMax.y, 0);
+            Vector3 p4 = new Vector3(innerMin.x, innerMax.y, 0);
+            Debug.DrawLine(p1, p2, Gizmos.color);
+            Debug.DrawLine(p2, p3, Gizmos.color);
+            Debug.DrawLine(p3, p4, Gizmos.color);
+            Debug.DrawLine(p4, p1, Gizmos.color);
+        }
     }
 #endif
 }
