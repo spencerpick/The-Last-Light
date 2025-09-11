@@ -201,6 +201,15 @@ MonoBehaviour:
   home: {fileID: 0}
   wanderRadius: 4
   softBound: 0.8
+  autoFindRoomBounds: 1
+  roomBoundsTag: RoomBounds
+  roomBoundsMask:
+    serializedVersion: 2
+    m_Bits: 0
+  roomSearchRadius: 30
+  boundsWarnMargin: 0.25
+  boundsProbe: 0.6
+  clampInsideBounds: 1
   obstacleMask:
     serializedVersion: 2
     m_Bits: 128
@@ -213,3 +222,5 @@ MonoBehaviour:
   dirXParam: DirX
   dirYParam: DirY
   faceSmooth: 0.08
+  debugAutoBinding: 0
+  roomBounds: {fileID: 0}

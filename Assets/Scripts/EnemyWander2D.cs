@@ -12,31 +12,32 @@ public class EnemyWander2D : MonoBehaviour
     [SerializeField] float minIdle = 0.4f;
     [SerializeField] float maxIdle = 1.1f;
 
-    [Header("Radius bias (soft, optional)")]
+    [Header("Soft radius bias (optional)")]
     [SerializeField] Transform home;                   // if null, uses start position
     [SerializeField] float wanderRadius = 4f;
     [Tooltip("Start biasing back to the centre after % of the radius.")]
     [SerializeField] float softBound = 0.8f;
 
-    [Header("Room bounds (hard)")]
-    [Tooltip("Collider that outlines the room (Box/Composite/etc). Keep as non-trigger.")]
-    [SerializeField] Collider2D roomBounds;
+    [Header("Room bounds (auto-bind via TAG on the collider object)")]
+    [Tooltip("Looks ONLY on GameObjects tagged RoomBounds, and ONLY on colliders on that same object (not children).")]
+    [SerializeField] bool autoFindRoomBounds = true;
+    [SerializeField] string roomBoundsTag = "RoomBounds";
     [Tooltip("How close to the bounds before we start preferring inward directions.")]
     [SerializeField] float boundsWarnMargin = 0.25f;
-    [Tooltip("How far ahead we look when deciding if a step would leave the room.")]
+    [Tooltip("How far ahead we look when deciding if a step would leave the room (world units).")]
     [SerializeField] float boundsProbe = 0.6f;
     [Tooltip("If true, snap the enemy back inside if it ever escapes the bounds.")]
     [SerializeField] bool clampInsideBounds = true;
 
-    [Header("Wall avoidance (uses collider shape-casts)")]
-    [SerializeField] LayerMask obstacleMask;           // set to your Walls/Decor layers
+    [Header("Obstacle sensing")]
+    [SerializeField] LayerMask obstacleMask;           // include Walls/Decor etc. (NOT the Room layer)
     [SerializeField] float castDistance = 0.28f;       // how far ahead to cast the collider
-    [SerializeField] float castSideInset = 0.06f;      // fraction of collider half-size for side casts (note: central cast only with rb.Cast)
+    [SerializeField] float castSideInset = 0.06f;      // compatibility (unused by rb.Cast)
     [SerializeField] float turnCooldown = 0.15f;       // min time between turns
 
     [Header("Stuck detection")]
-    [SerializeField] float stuckSpeed = 0.05f;         // if moving but speed < this
-    [SerializeField] float stuckTime = 0.35f;          // for this long => turn
+    [SerializeField] float stuckSpeed = 0.05f;
+    [SerializeField] float stuckTime = 0.35f;
 
     [Header("Animator params")]
     [SerializeField] string speedParam = "Speed";
@@ -44,12 +45,19 @@ public class EnemyWander2D : MonoBehaviour
     [SerializeField] string dirYParam = "DirY";
     [SerializeField] float faceSmooth = 0.06f;
 
+    [Header("Debug")]
+    [SerializeField] bool debugAutoBinding = true;     // turn on to see logs
+
     Rigidbody2D rb;
     Animator anim;
     Collider2D col;
 
+    // Final room collider (once bound, we keep it)
+    [SerializeField] Collider2D roomBounds;
+    bool hasBounds => roomBounds != null;
+
     Vector2 homePos;
-    Vector2 currentDir = Vector2.down;                 // current *cardinal* travel direction
+    Vector2 currentDir = Vector2.down;
     Vector2 desiredVel, currentVel;
     float segmentLeft;
     float idleTimer;
@@ -57,12 +65,30 @@ public class EnemyWander2D : MonoBehaviour
     float stuckTimer;
     Vector2 lastPos;
 
-    // Facing fed to the blend tree
     Vector2 faceDir = Vector2.down;
     Vector2 faceVel;
 
     ContactFilter2D filter;
     RaycastHit2D[] hits = new RaycastHit2D[6];
+
+    int rebindTriesLeft = 15;
+    float nextRebindAt;
+    const float RebindInterval = 0.15f;
+
+    // --------- Public API (spawner can set explicitly) ----------
+    public void BindToRoom(Collider2D bounds)
+    {
+        if (bounds && ColliderLooksLikeRoom(bounds) && BodyFullyInside(bounds, rb.position, col.bounds.extents))
+        {
+            roomBounds = bounds;
+            Debug.Log($"[EnemyWander2D] ({name}) Bound explicitly to room '{FullPath(roomBounds.transform)}'.");
+            if (!home) homePos = (Vector2)roomBounds.bounds.center;
+        }
+        else
+        {
+            Debug.LogWarning($"[EnemyWander2D] ({name}) BindToRoom ignored (null / wrong type / not containing body).");
+        }
+    }
 
     void Awake()
     {
@@ -84,21 +110,39 @@ public class EnemyWander2D : MonoBehaviour
         lastPos = rb.position;
 
         Physics2D.queriesStartInColliders = false;
+
+        if (debugAutoBinding)
+            Debug.Log($"[EnemyWander2D] ({name}) Awake at {rb.position}. AutoFind={autoFindRoomBounds}, Tag='{roomBoundsTag}'.");
+
+        if (autoFindRoomBounds && !roomBounds)
+            TryResolveRoomBounds();
     }
 
-    /// <summary>Call right after you spawn him to make this room his “home”.</summary>
-    public void SetHomeToHere()
+    void OnEnable()
     {
-        homePos = rb.position;
-        if (home != null) home.position = rb.position;
+        if (autoFindRoomBounds && !roomBounds)
+        {
+            rebindTriesLeft = 15;
+            nextRebindAt = Time.time + RebindInterval;
+        }
     }
 
     void FixedUpdate()
     {
+        // Retry a few times in case rooms spawn just after us
+        if (autoFindRoomBounds && !roomBounds && rebindTriesLeft > 0 && Time.time >= nextRebindAt)
+        {
+            if (!TryResolveRoomBounds())
+            {
+                rebindTriesLeft--;
+                nextRebindAt = Time.time + RebindInterval;
+            }
+        }
+
         Vector2 pos = rb.position;
 
-        // Optional: clamp back inside hard bounds if we ever slipped out
-        if (roomBounds && clampInsideBounds)
+        // Safety clamp (only if we have bounds)
+        if (clampInsideBounds && hasBounds)
             rb.position = ClampInsideRoom(rb.position);
 
         // Idle pause
@@ -110,7 +154,7 @@ public class EnemyWander2D : MonoBehaviour
             return;
         }
 
-        // Soft radius bias (nudge back toward centre)
+        // Soft radius bias
         Vector2 centre = home ? (Vector2)home.position : homePos;
         Vector2 toCentre = centre - pos;
         if (toCentre.magnitude > wanderRadius * softBound)
@@ -124,15 +168,15 @@ public class EnemyWander2D : MonoBehaviour
             }
         }
 
-        // Hard room-bounds bias/turn: if we're close to the edge or next step exits, pick inward
-        if (roomBounds && Time.time - lastTurnTime > turnCooldown)
+        // Hard bounds steer (only when bound)
+        if (hasBounds && Time.time - lastTurnTime > turnCooldown)
         {
             if (NearBounds(pos, boundsWarnMargin) || StepWouldExit(pos, currentDir))
             {
                 Vector2 inward = InwardCardinal(pos);
-                // Try to go inward if it’s not directly blocked; else try a safe perpendicular that stays inside
                 if (inward != Vector2.zero && inward != -currentDir && !StepWouldExit(pos, inward))
                 {
+                    if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Bounds steer -> inward {inward}.");
                     currentDir = inward;
                     SnapFace();
                     lastTurnTime = Time.time;
@@ -140,14 +184,12 @@ public class EnemyWander2D : MonoBehaviour
                 }
                 else
                 {
-                    // Pick a perpendicular that keeps us inside (fallback to reverse if needed)
                     Vector2 perpa = (currentDir == Vector2.up || currentDir == Vector2.down) ? Vector2.left : Vector2.up;
                     Vector2 perpb = -perpa;
 
-                    if (!StepWouldExit(pos, perpa)) { currentDir = perpa; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
-                    else if (!StepWouldExit(pos, perpb)) { currentDir = perpb; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
-                    else if (!StepWouldExit(pos, -currentDir)) { currentDir = -currentDir; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
-                    // else keep currentDir; we’ll rely on wall/stuck logic below
+                    if (!StepWouldExit(pos, perpa)) { if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Bounds steer -> perpA {perpa}."); currentDir = perpa; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
+                    else if (!StepWouldExit(pos, perpb)) { if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Bounds steer -> perpB {perpb}."); currentDir = perpb; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
+                    else if (!StepWouldExit(pos, -currentDir)) { if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Bounds steer -> reverse {-currentDir}."); currentDir = -currentDir; SnapFace(); lastTurnTime = Time.time; segmentLeft = segmentDistance; }
                 }
             }
         }
@@ -157,16 +199,17 @@ public class EnemyWander2D : MonoBehaviour
         segmentLeft -= step;
         desiredVel = currentDir * moveSpeed;
 
-        // Hard block check using the actual collider shape (central cast via rb.Cast)
+        // Obstacle turn
         if (BlockedAhead(pos, currentDir))
         {
+            if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Hit obstacle ahead -> turning.");
             TurnOnBlock(pos);
             segmentLeft = segmentDistance;
             SnapFace();
             lastTurnTime = Time.time;
         }
 
-        // Stuck detection (trying to move but barely progressing)
+        // Stuck watchdog
         float delta = (pos - lastPos).magnitude;
         lastPos = pos;
         bool tryingToMove = desiredVel.sqrMagnitude > 0.001f;
@@ -175,6 +218,7 @@ public class EnemyWander2D : MonoBehaviour
             stuckTimer += Time.fixedDeltaTime;
             if (stuckTimer >= stuckTime && Time.time - lastTurnTime > turnCooldown)
             {
+                if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Stuck watchdog -> turning.");
                 TurnOnBlock(pos);
                 segmentLeft = segmentDistance;
                 SnapFace();
@@ -184,15 +228,13 @@ public class EnemyWander2D : MonoBehaviour
         }
         else stuckTimer = 0f;
 
-        // End of segment → choose next + optional idle
+        // End of segment -> choose next + idle
         if (segmentLeft <= 0f)
         {
             segmentLeft = segmentDistance;
-
-            // Choose next with a preference to stay inside the room if we have bounds
-            currentDir = roomBounds ? ChooseNextCardinalInside(currentDir, pos)
-                                    : ChooseNextCardinal(currentDir, pos);
-
+            currentDir = hasBounds ? ChooseNextCardinalInside(currentDir, pos)
+                                   : ChooseNextCardinal(currentDir, pos);
+            if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) Segment end -> new dir {currentDir}.");
             SnapFace();
             lastTurnTime = Time.time;
 
@@ -201,6 +243,89 @@ public class EnemyWander2D : MonoBehaviour
         }
 
         ApplyMovementAndAnimation();
+    }
+
+    // ---------- TAG-ONLY auto bind (requires roomBoundsTag on the collider object) ----------
+    bool TryResolveRoomBounds()
+    {
+        Vector2 p = rb ? rb.position : (Vector2)transform.position;
+        var tagged = GameObject.FindGameObjectsWithTag(roomBoundsTag);
+
+        if (tagged.Length == 0)
+        {
+            Debug.LogWarning($"[EnemyWander2D] ({name}) No GameObjects found with tag '{roomBoundsTag}'. Did you tag the object that owns the OUTER Box/CompositeCollider2D?");
+            return false;
+        }
+
+        if (debugAutoBinding) Debug.Log($"[EnemyWander2D] ({name}) TryResolveRoomBounds at {p}. Tagged objects: {tagged.Length}");
+
+        Collider2D best = null;
+        float bestScore = float.MaxValue; // prefer smaller area, then closer center
+
+        foreach (var go in tagged)
+        {
+            // only colliders on THIS object (not in children)
+            var cols = go.GetComponents<Collider2D>();
+            if (cols == null || cols.Length == 0)
+            {
+                if (debugAutoBinding) Debug.Log($"  - '{FullPath(go.transform)}' has NO Collider2D on the tagged object (children are ignored).");
+                continue;
+            }
+
+            foreach (var c in cols)
+            {
+                if (!c || !c.enabled || c.isTrigger) { if (debugAutoBinding) Debug.Log($"    · Skip (null/disabled/trigger) {c}"); continue; }
+                if (!ColliderLooksLikeRoom(c)) { if (debugAutoBinding) Debug.Log($"    · Skip (not Box/Composite) {c.GetType().Name} on {FullPath(c.transform)}"); continue; }
+
+                bool contains = BodyFullyInside(c, p, col.bounds.extents);
+                if (debugAutoBinding) Debug.Log($"    · Candidate {c.GetType().Name} on {FullPath(c.transform)} -> {(contains ? "CONTAINS body" : "nope")}");
+
+                if (!contains) continue;
+
+                float area = c.bounds.size.x * c.bounds.size.y;
+                float centerDist = ((Vector2)c.bounds.center - p).sqrMagnitude;
+                float score = area + 0.001f * centerDist;
+
+                if (score < bestScore) { bestScore = score; best = c; }
+            }
+        }
+
+        if (best)
+        {
+            roomBounds = best;
+            Debug.Log($"[EnemyWander2D] ({name}) Auto-bound to '{FullPath(roomBounds.transform)}' (area {roomBounds.bounds.size.x * roomBounds.bounds.size.y:0.0}).");
+            if (!home) homePos = (Vector2)roomBounds.bounds.center;
+            return true;
+        }
+
+        Debug.LogWarning($"[EnemyWander2D] ({name}) No valid RoomBounds collider contained the enemy's body (make sure the TAG is on the object with the OUTER Box/CompositeCollider2D).");
+        return false;
+    }
+
+    static bool ColliderLooksLikeRoom(Collider2D c)
+    {
+        return c is BoxCollider2D || c is CompositeCollider2D;
+    }
+
+    static bool BodyFullyInside(Collider2D container, Vector2 pos, Vector2 bodyExtents)
+    {
+        var b = container.bounds;
+        // require our whole body to fit, not just the pivot point
+        bool insideX = pos.x >= (b.min.x + bodyExtents.x) && pos.x <= (b.max.x - bodyExtents.x);
+        bool insideY = pos.y >= (b.min.y + bodyExtents.y) && pos.y <= (b.max.y - bodyExtents.y);
+        return insideX && insideY;
+    }
+
+    static string FullPath(Transform t)
+    {
+        if (!t) return "<null>";
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(t.name);
+        while (t.parent)
+        {
+            t = t.parent;
+            sb.Insert(0, t.name + "/");
+        }
+        return sb.ToString();
     }
 
     // ===== Movement + Animator =====
@@ -212,7 +337,6 @@ public class EnemyWander2D : MonoBehaviour
         float speed = currentVel.magnitude;
         anim.SetFloat(speedParam, speed, 0.05f, Time.deltaTime);
 
-        // Face is driven from the intended direction (instant turns; no moonwalk)
         Vector2 targetFace = (speed > 0.1f) ? currentDir : faceDir;
         faceDir = Vector2.SmoothDamp(faceDir, targetFace, ref faceVel, faceSmooth);
         if (faceDir.sqrMagnitude > 0.0001f) faceDir.Normalize();
@@ -222,20 +346,16 @@ public class EnemyWander2D : MonoBehaviour
         anim.speed = 1f;
     }
 
-    void SnapFace()
-    {
-        faceDir = currentDir;
-        faceVel = Vector2.zero;
-    }
+    void SnapFace() { faceDir = currentDir; faceVel = Vector2.zero; }
 
-    // ===== Shape-cast based blocking (central shape cast via Rigidbody2D.Cast) =====
+    // ===== Obstacle cast via rigidbody =====
     bool BlockedAhead(Vector2 pos, Vector2 dir)
     {
         int count = rb.Cast(dir, filter, hits, castDistance);
         return count > 0;
     }
 
-    // ===== Direction helpers (no-bounds) =====
+    // ===== Direction helpers =====
     static Vector2 RandomCardinal()
     {
         int r = Random.Range(0, 4);
@@ -251,7 +371,6 @@ public class EnemyWander2D : MonoBehaviour
 
     Vector2 ChooseNextCardinal(Vector2 current, Vector2 pos)
     {
-        // forward bias > perpendiculars > 180 if boxed in
         Vector2[] order = current == Vector2.up
             ? new[] { Vector2.up, Vector2.left, Vector2.right, Vector2.down }
             : current == Vector2.down
@@ -264,10 +383,9 @@ public class EnemyWander2D : MonoBehaviour
             if (!BlockedAhead(rb.position, d))
                 return d;
 
-        return -current; // fully boxed in
+        return -current;
     }
 
-    // ===== Direction helpers (bounds-aware) =====
     Vector2 ChooseNextCardinalInside(Vector2 current, Vector2 pos)
     {
         Vector2[] order = current == Vector2.up
@@ -278,54 +396,53 @@ public class EnemyWander2D : MonoBehaviour
                     ? new[] { Vector2.left, Vector2.down, Vector2.up, Vector2.right }
                     : new[] { Vector2.right, Vector2.up, Vector2.down, Vector2.left };
 
-        // 1) Prefer directions that DO NOT exit bounds
         foreach (var d in order)
             if (!StepWouldExit(pos, d) && !BlockedAhead(rb.position, d))
                 return d;
 
-        // 2) If everything would exit, prefer the inward cardinal
         Vector2 inward = InwardCardinal(pos);
         if (inward != Vector2.zero && !BlockedAhead(rb.position, inward))
             return inward;
 
-        // 3) Fallback to normal logic
         return ChooseNextCardinal(current, pos);
     }
 
-    // ===== Bounds utilities =====
+    // ===== Bounds helpers =====
     bool NearBounds(Vector2 pos, float margin)
     {
-        if (!roomBounds) return false;
+        if (!hasBounds) return false;
         var b = roomBounds.bounds;
-        // Distance to each side
-        float left = (pos.x - b.min.x);
-        float right = (b.max.x - pos.x);
-        float down = (pos.y - b.min.y);
-        float up = (b.max.y - pos.y);
-        float minEdge = Mathf.Min(left, right, up, down);
-        return minEdge < margin;
+        float left = pos.x - b.min.x;
+        float right = b.max.x - pos.x;
+        float down = pos.y - b.min.y;
+        float up = b.max.y - pos.y;
+        return Mathf.Min(left, right, up, down) < margin;
     }
 
     bool StepWouldExit(Vector2 pos, Vector2 dir)
     {
-        if (!roomBounds) return false;
-        Vector2 probe = pos + dir.normalized * boundsProbe;
-        return !roomBounds.bounds.Contains(probe);
+        if (!hasBounds) return false;
+        Bounds b = roomBounds.bounds;
+        Vector2 ext = col.bounds.extents;
+        Vector2 p = pos + dir.normalized * boundsProbe;
+
+        bool insideX = p.x >= (b.min.x + ext.x) && p.x <= (b.max.x - ext.x);
+        bool insideY = p.y >= (b.min.y + ext.y) && p.y <= (b.max.y - ext.y);
+        return !(insideX && insideY);
     }
 
     Vector2 InwardCardinal(Vector2 pos)
     {
-        if (!roomBounds) return Vector2.zero;
+        if (!hasBounds) return Vector2.zero;
         Vector2 towardCentre = (Vector2)roomBounds.bounds.center - pos;
         return CardinalFromVector(towardCentre);
     }
 
     Vector2 ClampInsideRoom(Vector2 pos)
     {
-        if (!roomBounds) return pos;
+        if (!hasBounds) return pos;
 
         Bounds rbounds = roomBounds.bounds;
-        // respect our collider size so we don't clip into walls:
         Vector2 ext = col.bounds.extents;
 
         float clampedX = Mathf.Clamp(pos.x, rbounds.min.x + ext.x, rbounds.max.x - ext.x);
@@ -333,15 +450,12 @@ public class EnemyWander2D : MonoBehaviour
         return new Vector2(clampedX, clampedY);
     }
 
-    // ===== Turn on block =====
     void TurnOnBlock(Vector2 pos)
     {
-        // prefer turning left/right over 180
         Vector2 left = (currentDir == Vector2.up || currentDir == Vector2.down) ? Vector2.left : Vector2.up;
         Vector2 right = -left;
 
-        // If bounds exist, prefer options that remain inside
-        if (roomBounds)
+        if (hasBounds)
         {
             if (!StepWouldExit(pos, left)  && !BlockedAhead(pos, left)) { currentDir = left; return; }
             if (!StepWouldExit(pos, right) && !BlockedAhead(pos, right)) { currentDir = right; return; }
@@ -359,17 +473,14 @@ public class EnemyWander2D : MonoBehaviour
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
-        // Soft radius gizmo
         Gizmos.color = new Color(0f, 1f, 0f, 0.35f);
         Vector2 c = home ? (Vector2)home.position : (Vector2)transform.position;
         Gizmos.DrawWireSphere((Vector3)c, wanderRadius);
 
-        // Room bounds gizmo (margin + probe)
-        if (roomBounds)
+        if (hasBounds)
         {
             var b = roomBounds.bounds;
             Gizmos.color = new Color(1f, 0.6f, 0f, 0.25f);
-            // inner rectangle representing warn margin
             var innerMin = new Vector3(b.min.x + boundsWarnMargin, b.min.y + boundsWarnMargin, 0f);
             var innerMax = new Vector3(b.max.x - boundsWarnMargin, b.max.y - boundsWarnMargin, 0f);
             Vector3 p1 = new Vector3(innerMin.x, innerMin.y, 0);

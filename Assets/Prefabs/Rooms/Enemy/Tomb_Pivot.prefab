@@ -130,6 +130,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Tomb
       objectReference: {fileID: 0}
+    - target: {fileID: 6512577838794503420, guid: 9545311fc69e45a4284738f6b98cb844, type: 3}
+      propertyPath: m_TagString
+      value: RoomBounds
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

@@ -660,6 +660,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Ritual
       objectReference: {fileID: 0}
+    - target: {fileID: 6198902185594374102, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_TagString
+      value: RoomBounds
+      objectReference: {fileID: 0}
     - target: {fileID: 6815129650087872533, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
       propertyPath: m_Enabled
       value: 0

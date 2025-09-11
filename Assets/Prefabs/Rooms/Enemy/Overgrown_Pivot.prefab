@@ -1740,6 +1740,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Overgrown
       objectReference: {fileID: 0}
+    - target: {fileID: 6802075716527629677, guid: ca7a88a995920a240b700ce4d20639cd, type: 3}
+      propertyPath: m_TagString
+      value: RoomBounds
+      objectReference: {fileID: 0}
     - target: {fileID: 7083256691822682284, guid: ca7a88a995920a240b700ce4d20639cd, type: 3}
       propertyPath: m_Layer
       value: 7

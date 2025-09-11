@@ -12,6 +12,7 @@ TagManager:
   - Bones
   - Library
   - Statues
+  - RoomBounds
   layers:
   - Default
   - TransparentFX
