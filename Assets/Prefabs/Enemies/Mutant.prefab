@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 7678539921191941135}
   - component: {fileID: 38185810716199376}
   - component: {fileID: 8399220390420330912}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Mutant
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -203,10 +203,6 @@ MonoBehaviour:
   softBound: 0.8
   autoFindRoomBounds: 1
   roomBoundsTag: RoomBounds
-  roomBoundsMask:
-    serializedVersion: 2
-    m_Bits: 0
-  roomSearchRadius: 30
   boundsWarnMargin: 0.25
   boundsProbe: 0.6
   clampInsideBounds: 1
