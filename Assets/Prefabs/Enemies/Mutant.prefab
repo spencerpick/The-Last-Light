@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 7678539921191941135}
   - component: {fileID: 38185810716199376}
   - component: {fileID: 8399220390420330912}
+  - component: {fileID: 5440880114529331044}
   m_Layer: 10
   m_Name: Mutant
   m_TagString: Untagged
@@ -220,3 +221,30 @@ MonoBehaviour:
   faceSmooth: 0.08
   debugAutoBinding: 0
   roomBounds: {fileID: 0}
+--- !u!114 &5440880114529331044
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3836593367748638530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 857f356a2b21d1f49834d75d5010418f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 5
+  currentHealth: 5
+  hurtIFrames: 0.1
+  destroyDelay: 0
+  disableOnDeath: []
+  collidersOnDeath: []
+  onDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  onDied:
+    m_PersistentCalls:
+      m_Calls: []
+  hurtTrigger: Hurt
+  deathTrigger: Die
+  verboseLogging: 1
