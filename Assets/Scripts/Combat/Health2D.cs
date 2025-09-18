@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.Events;
 
 [DisallowMultipleComponent]
@@ -14,48 +15,42 @@ public class Health2D : MonoBehaviour, IDamageable
 
     [Header("Death")]
     [Tooltip("Destroy GameObject after death (seconds). 0 = destroy immediately.")]
-    [Min(0f)] public float destroyDelay = 0.2f;
-
-    [Tooltip("Extra behaviours to disable on death (AI scripts, movement, etc.). Optional.")]
-    public Behaviour[] disableOnDeath;
-
-    [Tooltip("Extra colliders to disable on death (if you don’t want to auto-disable all). Optional.")]
-    public Collider2D[] collidersOnDeath;
-
-    [Header("Animation (optional)")]
+    [Min(0f)] public float destroyDelay = 0f;
+    [Tooltip("Optional Animator to drive death visuals.")]
     public Animator animator;
-    public string hurtTrigger = "Hurt";
+    [Tooltip("Animator trigger or bool to set when dying (optional).")]
     public string deathTrigger = "Die";
+    public string deathBool = "";
+
+    [Header("FX / Feedback")]
+    public HitFlash hitFlash;
+    public bool applyKnockback = true;
 
     [Header("Events")]
-    public UnityEvent<float, float> onDamaged; // (newHealth, damageDealt)
+    public UnityEvent onDamaged;
+    public UnityEvent onHealed;
     public UnityEvent onDied;
 
-    [Header("Debug")]
-    public bool verboseLogging = true;
-
-    float iFrameTimer;
-    bool dead;
-
+    // internal
+    float iFrameTimer = 0f;
+    bool dead = false;
     Rigidbody2D rb;
-
-    void Reset()
-    {
-        animator = GetComponentInChildren<Animator>();
-        rb = GetComponent<Rigidbody2D>();
-        // Attempt to set sensible defaults
-        if (currentHealth <= 0f) currentHealth = maxHealth > 0 ? maxHealth : 5f;
-    }
+    readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
+    Color[] baseColors;
 
     void Awake()
     {
-        if (!animator) animator = GetComponentInChildren<Animator>();
         rb = GetComponent<Rigidbody2D>();
-
+        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!hitFlash) hitFlash = GetComponentInChildren<HitFlash>(true);
         if (currentHealth <= 0f) currentHealth = maxHealth;
 
-        if (verboseLogging)
-            Debug.Log($"[Health2D] ({name}) Awake: {currentHealth}/{maxHealth} HP");
+        // cache renderers (for HitFlash if needed)
+        if (renderers.Count == 0)
+            renderers.AddRange(GetComponentsInChildren<SpriteRenderer>(true));
+        baseColors = new Color[renderers.Count];
+        for (int i = 0; i < renderers.Count; i++)
+            if (renderers[i]) baseColors[i] = renderers[i].color;
     }
 
     void Update()
@@ -65,41 +60,44 @@ public class Health2D : MonoBehaviour, IDamageable
 
     public bool ReceiveHit(in HitInfo hit)
     {
-        if (dead)
-        {
-            if (verboseLogging) Debug.Log($"[Health2D] ({name}) Hit ignored: already dead.");
-            return false;
-        }
-        if (iFrameTimer > 0f)
-        {
-            if (verboseLogging) Debug.Log($"[Health2D] ({name}) Hit ignored: i-frames {iFrameTimer:F2}s");
-            return false;
-        }
+        if (dead) return false;
+        if (iFrameTimer > 0f) return false;
 
-        // Apply damage
-        float newHealth = Mathf.Max(0f, currentHealth - hit.damage);
-        float dealt = currentHealth - newHealth;
-        currentHealth = newHealth;
+        // damage
+        float dmg = Mathf.Max(0f, hit.damage);
+        if (dmg <= 0f) return false;
+
+        currentHealth = Mathf.Max(0f, currentHealth - dmg);
         iFrameTimer = hurtIFrames;
 
-        // Knockback
-        if (rb && hit.knockback.sqrMagnitude > 0.0001f)
+        // feedback
+        if (hitFlash) hitFlash.Flash();
+
+        if (applyKnockback && rb)
             rb.AddForce(hit.knockback, ForceMode2D.Impulse);
 
-        // Anim (optional)
-        if (animator && !string.IsNullOrEmpty(hurtTrigger) && currentHealth > 0f)
-            animator.SetTrigger(hurtTrigger);
+        onDamaged?.Invoke();
 
-        // Log each hit
-        if (verboseLogging)
-            Debug.Log($"[Health2D] ({name}) Took {dealt} dmg → {currentHealth}/{maxHealth} HP");
-
-        onDamaged?.Invoke(currentHealth, dealt);
+        // ① LOG when the PLAYER is hit (your ask #1)
+        if (CompareTag("Player"))
+        {
+            Debug.Log($"[Player] Took {dmg} damage → {currentHealth}/{maxHealth} HP left.");
+        }
 
         if (currentHealth <= 0f)
+        {
             Die();
+        }
 
         return true;
+    }
+
+    public void Heal(float amount)
+    {
+        if (dead) return;
+        float before = currentHealth;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + Mathf.Max(0f, amount));
+        if (currentHealth > before) onHealed?.Invoke();
     }
 
     void Die()
@@ -107,47 +105,20 @@ public class Health2D : MonoBehaviour, IDamageable
         if (dead) return;
         dead = true;
 
-        // Stop any motion immediately
-        if (rb)
-        {
-            rb.velocity = Vector2.zero;
-            rb.angularVelocity = 0f;
-            rb.simulated = false; // switch off physics so it can’t move anymore
-        }
-
-        // Disable all colliders so it can’t be hit again / block anything
-        var allCols = GetComponentsInChildren<Collider2D>(includeInactive: true);
-        foreach (var c in allCols) c.enabled = false;
-
-        // Extra, user-specified colliders
-        if (collidersOnDeath != null)
-            foreach (var c in collidersOnDeath) if (c) c.enabled = false;
-
-        // Disable commonly-problematic behaviours automatically (except this Health2D)
-        var allBehaviours = GetComponentsInChildren<Behaviour>(includeInactive: true);
-        foreach (var b in allBehaviours)
-        {
-            if (!b) continue;
-            if (b == this) continue; // keep Health2D alive to finish destruction
-            // Keep Animator on for death anim if provided below
-            if (animator && b == animator) continue;
-            b.enabled = false;
-        }
-
-        // Then disable any extra scripts you explicitly listed
-        if (disableOnDeath != null)
-            foreach (var b in disableOnDeath) if (b) b.enabled = false;
-
-        // Play death anim (optional)
-        if (animator && !string.IsNullOrEmpty(deathTrigger))
-            animator.SetTrigger(deathTrigger);
-
-        if (verboseLogging)
-            Debug.Log($"[Health2D] ({name}) Died. Destroy in {destroyDelay:0.00}s");
-
         onDied?.Invoke();
 
-        // Finally, destroy the GameObject (immediate or delayed)
+        // Animator flags if provided
+        if (animator)
+        {
+            if (!string.IsNullOrEmpty(deathTrigger)) animator.SetTrigger(deathTrigger);
+            if (!string.IsNullOrEmpty(deathBool)) animator.SetBool(deathBool, true);
+        }
+
+        // Disable colliders so corpses don’t block
+        foreach (var c in GetComponentsInChildren<Collider2D>(true))
+            c.enabled = false;
+
+        // Finally, destroy (immediate or delayed)
         if (destroyDelay <= 0f) Destroy(gameObject);
         else Destroy(gameObject, destroyDelay);
     }
@@ -156,7 +127,8 @@ public class Health2D : MonoBehaviour, IDamageable
     {
         if (maxHealth < 1f) maxHealth = 1f;
         if (currentHealth > maxHealth) currentHealth = maxHealth;
-        if (animator == null) animator = GetComponentInChildren<Animator>();
-        if (rb == null) rb = GetComponent<Rigidbody2D>();
+        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!rb) rb = GetComponent<Rigidbody2D>();
+        if (!hitFlash) hitFlash = GetComponentInChildren<HitFlash>(true);
     }
 }

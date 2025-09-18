@@ -15,6 +15,8 @@ GameObject:
   - component: {fileID: 38185810716199376}
   - component: {fileID: 8399220390420330912}
   - component: {fileID: 5440880114529331044}
+  - component: {fileID: 9151090315596040909}
+  - component: {fileID: -1840250462980550106}
   m_Layer: 10
   m_Name: Mutant
   m_TagString: Untagged
@@ -200,32 +202,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveSpeed: 1.8
-  acceleration: 12
-  segmentDistance: 1
-  minIdle: 0.4
-  maxIdle: 1.1
-  home: {fileID: 0}
-  wanderRadius: 4
-  softBound: 0.8
-  autoFindRoomBounds: 1
-  roomBoundsTag: RoomBounds
-  boundsWarnMargin: 0.25
-  boundsProbe: 0.6
-  clampInsideBounds: 1
+  segmentTimeRange: {x: 1, y: 2}
   obstacleMask:
     serializedVersion: 2
     m_Bits: 128
-  castDistance: 0.28
-  castSideInset: 0.06
-  turnCooldown: 0.15
-  stuckSpeed: 0.05
-  stuckTime: 0.45
-  speedParam: Speed
-  dirXParam: DirX
-  dirYParam: DirY
-  faceSmooth: 0.08
-  debugAutoBinding: 1
-  roomBounds: {fileID: 0}
+  freezeUntilBound: 1
+  autoFindBounds: 1
+  roomTag: RoomBounds
+  requireFullContainment: 0
+  insidePadding: 0.02
+  rebindIfOutside: 1
+  bindRetryInterval: 0.15
+  minProgressDistance: 0.35
+  stuckWindowSeconds: 1.2
+  scoutDistance: 3
+  castSkin: 0.02
+  animator: {fileID: 0}
+  spriteRenderer: {fileID: 0}
+  flipSpriteOnX: 0
+  rotateTransformToDir: 0
+  rotateDegreesPerSecond: 720
+  paramX: DirX
+  paramY: DirY
+  paramSpeed: Speed
 --- !u!114 &5440880114529331044
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -242,18 +241,87 @@ MonoBehaviour:
   currentHealth: 5
   hurtIFrames: 0.1
   destroyDelay: 0
-  disableOnDeath: []
-  collidersOnDeath: []
   animator: {fileID: 3968637407488380781}
-  hurtTrigger: Hurt
   deathTrigger: Die
+  deathBool: 
+  hitFlash: {fileID: 9151090315596040909}
+  applyKnockback: 1
   onDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  onHealed:
     m_PersistentCalls:
       m_Calls: []
   onDied:
     m_PersistentCalls:
       m_Calls: []
-  verboseLogging: 1
+--- !u!114 &9151090315596040909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3836593367748638530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 33b937dd5c3f1684081bfb0214548a4c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  renderers: []
+  flashColor: {r: 1, g: 0, b: 0, a: 1}
+  maxBlend: 0.6
+  riseTime: 0.15
+  fallTime: 0.35
+--- !u!114 &-1840250462980550106
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3836593367748638530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9ff9c3c616848d4097e74c84e8af7be, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 0}
+  chaseSpeed: 2
+  detectionRadius: 6
+  loseRadius: 8
+  attackRange: 1.1
+  holdDistance: 0.75
+  losBlockers:
+    serializedVersion: 2
+    m_Bits: 128
+  avoidLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  avoidProbeDistance: 1
+  sideProbeOffset: 0.45
+  sideCommitSeconds: 0.35
+  attack: {fileID: 11400000, guid: ec344aec6d671dd4fa464d5a6fcedd29, type: 2}
+  hittableLayers:
+    serializedVersion: 2
+    m_Bits: 256
+  pivot: {fileID: 0}
+  attackTrigger: Attack
+  extraAttackDelayRange: {x: 0.2, y: 0.6}
+  retreatSeconds: 0.3
+  retreatSpeedMultiplier: 1
+  staggerSecondsOnHit: 0.3
+  paramMoveX: MoveX
+  paramMoveY: MoveY
+  paramIsMoving: IsMoving
+  paramSpeed: Speed
+  paramIsAttacking: IsAttacking
+  attackStateName: AttackBT
+  animatorLayerIndex: 0
+  attackFailSafeNormalized: 0.98
+  attackFailSafeTimeout: 1.25
+  wanderToToggle: {fileID: 8399220390420330912}
+  quantizeTo4Directions: 1
+  verbose: 0
+  drawGizmos: 1
 --- !u!1001 &5558833241096022884
 PrefabInstance:
   m_ObjectHideFlags: 0

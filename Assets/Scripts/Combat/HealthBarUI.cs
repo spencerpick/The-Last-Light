@@ -1,117 +1,167 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 [RequireComponent(typeof(RectTransform))]
 public class HealthBarUI : MonoBehaviour
 {
     [Header("Target")]
-    public Health2D target;          // leave empty to auto-find in parent
+    [Tooltip("Leave empty to auto-find a Health2D on this object or its parents.")]
+    public Health2D target;
 
     [Header("UI")]
-    public Image fill;               // assign your red Fill image
-    public Image background;         // optional: assign Background image (this object) for alpha control
+    [Tooltip("Assign the red Fill Image of your bar.")]
+    public Image fill;
+    [Tooltip("Optional CanvasGroup on the bar root for smooth fades.")]
+    public CanvasGroup canvasGroup;
 
     [Header("Behaviour")]
-    public bool hideWhenFull = true; // auto-hide when at full HP
-    public float fadeOutDelay = 1.5f;
-    public float fadeSpeed = 5f;
+    [Tooltip("If true, the bar only shows when damaged, then fades out.")]
+    public bool showOnlyWhenDamaged = true;
+    [Tooltip("How long to stay fully visible after damage/heal before starting to fade.")]
+    public float holdSeconds = 1.2f;
+    [Tooltip("Fade out duration after hold time (seconds).")]
+    public float fadeOutSeconds = 0.35f;
 
-    float lastHp = -1f;
-    float lastMax = -1f;
-    float lastDamageTime = -999f;
-    float currentAlpha = 1f;
+    [Header("Color control (optional)")]
+    [Tooltip("If true, the script will drive fill.color using the gradient below. Leave OFF to preserve your Inspector color.")]
+    public bool useGradientColor = false;
+    [Tooltip("Evaluated by current HP% if useGradientColor is true.")]
+    public Gradient colorByHealth;
+
+    float visibleTimer = 0f;
+
+    // cached delegates so RemoveListener works 1:1
+    UnityAction damagedHandler;
+    UnityAction healedHandler;
+    UnityAction diedHandler;
 
     void Awake()
     {
         if (!target) target = GetComponentInParent<Health2D>();
-        if (!fill) Debug.LogWarning("[HealthBarUI] Fill Image not assigned.");
-        if (!background) background = GetComponent<Image>();
-        RefreshImmediate(true);
-
-        // Try to hook events if the target has them
-        if (target != null)
-        {
-            try
-            {
-                target.onDamaged.AddListener(OnDamaged);
-                target.onDied.AddListener(OnDied);
-            }
-            catch { /* if your Health2D doesn't expose events, polling still works */ }
-        }
+        if (!canvasGroup) canvasGroup = GetComponent<CanvasGroup>();
+        damagedHandler = OnDamaged;
+        healedHandler  = OnHealed;
+        diedHandler    = OnDied;
+        ApplyImmediate();
     }
 
-    void OnDestroy()
+    void OnEnable()
     {
-        if (target != null)
-        {
-            try
-            {
-                target.onDamaged.RemoveListener(OnDamaged);
-                target.onDied.RemoveListener(OnDied);
-            }
-            catch { }
-        }
+        Subscribe();
+        ApplyImmediate();
+    }
+
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+
+    void Subscribe()
+    {
+        if (!target) target = GetComponentInParent<Health2D>();
+        if (!target) return;
+
+        target.onDamaged.RemoveListener(damagedHandler);
+        target.onHealed.RemoveListener(healedHandler);
+        target.onDied.RemoveListener(diedHandler);
+
+        target.onDamaged.AddListener(damagedHandler);
+        target.onHealed.AddListener(healedHandler);
+        target.onDied.AddListener(diedHandler);
+    }
+
+    void Unsubscribe()
+    {
+        if (!target) return;
+        target.onDamaged.RemoveListener(damagedHandler);
+        target.onHealed.RemoveListener(healedHandler);
+        target.onDied.RemoveListener(diedHandler);
     }
 
     void Update()
     {
-        if (!target || !fill) return;
+        if (!target) return;
 
-        // Poll health each frame so the bar always tracks even if events aren't fired
-        if (!Mathf.Approximately(target.currentHealth, lastHp) ||
-            !Mathf.Approximately(target.maxHealth, lastMax))
+        UpdateFillVisuals();
+
+        if (showOnlyWhenDamaged)
         {
-            // if HP dropped, mark as recently damaged (affects fade)
-            if (target.currentHealth < lastHp) lastDamageTime = Time.time;
+            if (target.currentHealth < target.maxHealth && visibleTimer <= 0f)
+                SetAlpha(1f);
 
-            RefreshImmediate(true);
-            lastHp = target.currentHealth;
-            lastMax = target.maxHealth;
-            currentAlpha = 1f; // pop visible on change
+            if (visibleTimer > 0f)
+            {
+                visibleTimer -= Time.deltaTime;
+
+                float alpha = 1f;
+                if (visibleTimer < fadeOutSeconds && fadeOutSeconds > 0f)
+                {
+                    float t = 1f - (visibleTimer / fadeOutSeconds);
+                    alpha = Mathf.Lerp(1f, 0f, Mathf.Clamp01(t));
+                }
+                SetAlpha(alpha);
+
+                if (visibleTimer <= 0f && target.currentHealth >= target.maxHealth)
+                    SetAlpha(0f);
+            }
+            else if (target.currentHealth >= target.maxHealth)
+            {
+                SetAlpha(0f);
+            }
         }
-
-        // Fade / hide logic
-        float targetAlpha = 1f;
-        bool isFull = Mathf.Approximately(target.currentHealth, target.maxHealth);
-        if (hideWhenFull && isFull && Time.time > lastDamageTime + fadeOutDelay)
-            targetAlpha = 0f;
-
-        currentAlpha = Mathf.MoveTowards(currentAlpha, targetAlpha, fadeSpeed * Time.deltaTime);
-        ApplyAlpha(currentAlpha);
-    }
-
-    void ApplyAlpha(float a)
-    {
-        if (fill)
+        else
         {
-            var c = fill.color; c.a = a; fill.color = c;
-        }
-        if (background)
-        {
-            var c = background.color; c.a = a * 0.6f; background.color = c;
+            SetAlpha(1f);
         }
     }
 
-    void OnDamaged(float newHealth, float damageDealt)
+    // ───────── event handlers
+    void OnDamaged()
     {
-        lastDamageTime = Time.time;
-        RefreshImmediate(true);
-        currentAlpha = 1f; // ensure visible on hit
+        visibleTimer = holdSeconds + fadeOutSeconds;
+        UpdateFillVisuals();
+    }
+
+    void OnHealed()
+    {
+        visibleTimer = Mathf.Max(visibleTimer, 0.5f);
+        UpdateFillVisuals();
     }
 
     void OnDied()
     {
-        RefreshImmediate(true);
-        ApplyAlpha(0f);
-        // If parent isn't destroyed immediately, remove the bar
-        Destroy(gameObject);
+        SetAlpha(0f);
     }
 
-    public void RefreshImmediate(bool force = false)
+    // ───────── helpers
+    void ApplyImmediate()
+    {
+        UpdateFillVisuals();
+        if (showOnlyWhenDamaged)
+            SetAlpha(target && target.currentHealth < target.maxHealth ? 1f : 0f);
+        else
+            SetAlpha(1f);
+    }
+
+    void UpdateFillVisuals()
     {
         if (!target || !fill) return;
-        float ratio = (target.maxHealth > 0f) ? target.currentHealth / target.maxHealth : 0f;
-        if (force || !Mathf.Approximately(fill.fillAmount, ratio))
-            fill.fillAmount = Mathf.Clamp01(ratio);
+
+        float pct = (target.maxHealth <= 0f) ? 0f : Mathf.Clamp01(target.currentHealth / target.maxHealth);
+        fill.fillAmount = pct;
+
+        if (useGradientColor && colorByHealth != null)
+            fill.color = colorByHealth.Evaluate(pct);
+        // else: leave fill.color exactly as set in the Inspector (so it stays red)
+    }
+
+    void SetAlpha(float a)
+    {
+        if (!canvasGroup) return;
+        a = Mathf.Clamp01(a);
+        canvasGroup.alpha = a;
+        canvasGroup.interactable = a > 0.999f;
+        canvasGroup.blocksRaycasts = a > 0.001f;
     }
 }

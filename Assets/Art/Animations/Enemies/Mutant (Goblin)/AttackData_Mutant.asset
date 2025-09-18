@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 31abf2b0692f94841af994b114d7d941, type: 3}
-  m_Name: AttackData
+  m_Name: AttackData_Mutant
   m_EditorClassIdentifier: 
   damage: 1
   knockbackForce: 3

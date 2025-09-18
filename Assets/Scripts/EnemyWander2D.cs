@@ -40,12 +40,15 @@ public class EnemyWander2D : MonoBehaviour
     public bool flipSpriteOnX = false;
     public bool rotateTransformToDir = false;
     public float rotateDegreesPerSecond = 720f;
-    public string paramX = "DirX";
-    public string paramY = "DirY";
+
+    // 👉 default to player-style names so we drive your trees directly
+    public string paramX = "MoveX";
+    public string paramY = "MoveY";
     public string paramSpeed = "Speed";
 
-    static readonly string[] AltX = { "DirX", "MoveX", "Horizontal" };
-    static readonly string[] AltY = { "DirY", "MoveY", "Vertical" };
+    // keep alternates as a safety net
+    static readonly string[] AltX = { "MoveX", "DirX", "Horizontal" };
+    static readonly string[] AltY = { "MoveY", "DirY", "Vertical" };
     static readonly string[] AltS = { "Speed", "speed" };
 
     // internals
@@ -80,8 +83,6 @@ public class EnemyWander2D : MonoBehaviour
 
         progressStartPos = transform.position;
         progressTimer = 0f;
-
-        Debug.Log($"[EnemyWander2D] ({name}) Awake at ({transform.position.x:F2}, {transform.position.y:F2}). AutoFind={autoFindBounds}, Tag='{roomTag}'.");
     }
 
     void OnEnable()
@@ -103,8 +104,6 @@ public class EnemyWander2D : MonoBehaviour
     void TryResolveRoomBounds()
     {
         var all = GameObject.FindGameObjectsWithTag(roomTag);
-        Debug.Log($"[EnemyWander2D] ({name}) TryResolveRoomBounds at ({transform.position.x:F2}, {transform.position.y:F2}). Tagged objects: {all.Length}");
-
         var center = (Vector2)bodyCollider.bounds.center;
         var half = bodyCollider.bounds.extents;
 
@@ -114,15 +113,7 @@ public class EnemyWander2D : MonoBehaviour
             if (!col || !col.enabled) continue;
 
             bool contains = requireFullContainment ? BodyInside(col, center, half) : CenterInside(col, center);
-            Debug.Log($"    · Candidate BoxCollider2D on {GetHierarchyPath(go.transform)} -> {(contains ? "CONTAINS body" : "nope")}");
-
-            if (contains)
-            {
-                boundRoom = col;
-                float area = col.bounds.size.x * col.bounds.size.y;
-                Debug.Log($"[EnemyWander2D] ({name}) Auto-bound to '{GetHierarchyPath(go.transform)}' (area {area:F1}).");
-                break;
-            }
+            if (contains) { boundRoom = col; break; }
         }
     }
 
@@ -169,14 +160,13 @@ public class EnemyWander2D : MonoBehaviour
             return;
         }
 
-        // Stuck watchdog: are we making progress?
+        // Stuck watchdog
         progressTimer += Time.fixedDeltaTime;
         if (progressTimer >= stuckWindowSeconds)
         {
             float dist = Vector2.Distance(progressStartPos, (Vector2)transform.position);
             if (dist < minProgressDistance)
             {
-                // We’re probably oscillating → pick a smarter direction
                 dir = ChooseBestCardinalDirection(avoidReverse: true);
                 segmentTimer = Random.Range(segmentTimeRange.x, segmentTimeRange.y);
             }
@@ -184,11 +174,11 @@ public class EnemyWander2D : MonoBehaviour
             progressTimer = 0f;
         }
 
-        // normal segment timing
+        // segment timing
         segmentTimer -= Time.fixedDeltaTime;
         if (segmentTimer <= 0f) PickNewDirection();
 
-        // Bounce on room boundary, but prefer a smarter choice
+        // Bounce on room boundary
         if (boundRoom != null)
         {
             Vector2 nextCenter = (Vector2)bodyCollider.bounds.center + dir * moveSpeed * Time.fixedDeltaTime;
@@ -228,24 +218,18 @@ public class EnemyWander2D : MonoBehaviour
     {
         Vector2[] candidates = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
         float bestScore = -1f;
-        Vector2 best = -dir; // decent fallback
+        Vector2 best = -dir; // fallback
 
         foreach (var c in candidates)
         {
             float free = EstimateFreeDistance(c);
-            // tiny preference to keep general heading, and penalty for straight reverse to reduce ping-pong
             float dot = Vector2.Dot(c, dir);
             if (avoidReverse && dot < -0.8f) free *= 0.7f;
             else if (dot > 0.8f) free *= 1.05f;
 
-            if (free > bestScore)
-            {
-                bestScore = free;
-                best = c;
-            }
+            if (free > bestScore) { bestScore = free; best = c; }
         }
 
-        // If everything looks cramped, just rotate 90° off current heading
         if (bestScore < 0.2f)
         {
             best = Mathf.Abs(dir.x) > 0.1f ? (Random.value < 0.5f ? Vector2.up : Vector2.down)
@@ -256,10 +240,8 @@ public class EnemyWander2D : MonoBehaviour
 
     float EstimateFreeDistance(Vector2 d)
     {
-        // limit by room first
         float roomLimit = boundRoom ? DistanceToRoomEdgeAlong(d) : scoutDistance;
 
-        // then obstacles via BoxCastAll
         var center = (Vector2)bodyCollider.bounds.center;
         var size = bodyCollider.bounds.size - new Vector3(castSkin, castSkin, 0f);
         float maxDist = Mathf.Min(roomLimit, scoutDistance);
@@ -271,10 +253,9 @@ public class EnemyWander2D : MonoBehaviour
             var h = hits[i];
             if (h.collider == null) continue;
             if (h.collider == bodyCollider) continue;
-            if (boundRoom != null && h.collider == boundRoom) continue; // ignore the room walls; roomLimit already handles them
+            if (boundRoom != null && h.collider == boundRoom) continue;
             if (h.distance < hitDist) hitDist = h.distance;
         }
-        // keep a tiny safety margin so we don't touch
         return Mathf.Max(0f, hitDist - castSkin);
     }
 
@@ -304,7 +285,6 @@ public class EnemyWander2D : MonoBehaviour
         float maxX = d.x > 0f ? (b.max.x - (c.x + e.x)) : (d.x < 0f ? ((c.x - e.x) - b.min.x) : float.PositiveInfinity);
         float maxY = d.y > 0f ? (b.max.y - (c.y + e.y)) : (d.y < 0f ? ((c.y - e.y) - b.min.y) : float.PositiveInfinity);
 
-        // project to distance along direction (handle pure axis cases)
         if (d.x == 0f) return Mathf.Max(0f, maxY);
         if (d.y == 0f) return Mathf.Max(0f, maxX);
         float alongX = maxX / Mathf.Abs(d.x);
@@ -367,14 +347,6 @@ public class EnemyWander2D : MonoBehaviour
     {
         if (string.IsNullOrEmpty(name) || animator == null) return;
         if (animParams.Contains(name)) animator.SetFloat(name, value);
-    }
-
-    // ─────────────────────── Utils & Gizmos
-    static string GetHierarchyPath(Transform t)
-    {
-        var sb = new System.Text.StringBuilder(t.name);
-        while (t.parent != null) { t = t.parent; sb.Insert(0, t.name + "/"); }
-        return sb.ToString();
     }
 
 #if UNITY_EDITOR

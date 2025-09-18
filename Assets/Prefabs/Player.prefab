@@ -117,6 +117,8 @@ GameObject:
   - component: {fileID: 5660823728027536056}
   - component: {fileID: 4570387775254855207}
   - component: {fileID: 8835007505654805709}
+  - component: {fileID: 2688740933595881903}
+  - component: {fileID: 878452112260711896}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -325,5 +327,54 @@ MonoBehaviour:
   attackTrigger: Attack
   dirXParam: MoveX
   dirYParam: MoveY
+  attackingBool: IsAttacking
+  verboseLogging: 1
   drawHitboxGizmo: 1
   gizmoColor: {r: 1, g: 0.4, b: 0.1, a: 0.25}
+--- !u!114 &2688740933595881903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2210471384161370293}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 857f356a2b21d1f49834d75d5010418f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 100
+  currentHealth: 100
+  hurtIFrames: 0.3
+  destroyDelay: 0.2
+  animator: {fileID: 7952627984352608095}
+  deathTrigger: Die
+  deathBool: 
+  hitFlash: {fileID: 878452112260711896}
+  applyKnockback: 1
+  onDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  onHealed:
+    m_PersistentCalls:
+      m_Calls: []
+  onDied:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &878452112260711896
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2210471384161370293}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 33b937dd5c3f1684081bfb0214548a4c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  renderers: []
+  flashColor: {r: 1, g: 0, b: 0, a: 1}
+  maxBlend: 0.6
+  riseTime: 0.15
+  fallTime: 0.3
