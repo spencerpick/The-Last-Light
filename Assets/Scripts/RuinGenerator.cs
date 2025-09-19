@@ -47,6 +47,10 @@ public class RuinGenerator : MonoBehaviour
     [Header("Adjacency Rules")]
     public List<ForbiddenAdjacency> forbiddenAdjacencies;
 
+    [Header("Debug & Gizmos")]
+    [Tooltip("Toggle to show/hide all debug gizmos drawn by this generator.")]
+    public bool showDebugGizmos = true;
+
     private List<GameObject> placedRooms = new List<GameObject>();
     private Dictionary<Vector2Int, GameObject> gridOccupancyMap = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<GameObject, Vector2Int> roomToGridOrigin = new Dictionary<GameObject, Vector2Int>();
@@ -609,6 +613,9 @@ public class RuinGenerator : MonoBehaviour
 
     void OnDrawGizmos()
     {
+        // New toggle: allow turning all gizmos on/off from the inspector.
+        if (!showDebugGizmos) return;
+
         if (Application.isPlaying)
         {
             float debugGridUnitSize = 1f;

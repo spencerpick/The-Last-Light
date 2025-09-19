@@ -84,7 +84,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 99
   m_Sprite: {fileID: 1189098128, guid: e9ce46127daa9e54ab7659edb3648398, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -225,6 +225,9 @@ MonoBehaviour:
   paramX: DirX
   paramY: DirY
   paramSpeed: Speed
+  showRoomGizmo: 0
+  showDirectionGizmo: 1
+  roomGizmoColor: {r: 1, g: 0, b: 0.5707547, a: 0.15}
 --- !u!114 &5440880114529331044
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -292,13 +295,22 @@ MonoBehaviour:
   holdDistance: 0.75
   losBlockers:
     serializedVersion: 2
-    m_Bits: 128
-  avoidLayers:
+    m_Bits: 2176
+  faceChangeCooldown: 0.15
+  faceAxisHysteresis: 0.2
+  useGridPathfinding: 1
+  pathCellSize: 0.32
+  pathWorldSize: {x: 16, y: 16}
+  pathObstacleMask:
     serializedVersion: 2
-    m_Bits: 128
-  avoidProbeDistance: 1
-  sideProbeOffset: 0.45
-  sideCommitSeconds: 0.35
+    m_Bits: 2176
+  pathIncludeTriggers: 1
+  pathAllowDiagonal: 0
+  agentRadius: 0.2
+  pathRecalcInterval: 0.35
+  waypointReachRadius: 0.18
+  slideProbeDistance: 0.8
+  slideCommitSeconds: 0.4
   attack: {fileID: 11400000, guid: ec344aec6d671dd4fa464d5a6fcedd29, type: 2}
   hittableLayers:
     serializedVersion: 2
@@ -319,9 +331,11 @@ MonoBehaviour:
   attackFailSafeNormalized: 0.98
   attackFailSafeTimeout: 1.25
   wanderToToggle: {fileID: 8399220390420330912}
-  quantizeTo4Directions: 1
-  verbose: 0
-  drawGizmos: 1
+  forcePathAlways: 0
+  debugDraw: 1
+  debugLog: 1
+  drawPathGrid: 1
+  gridColor: {r: 0, g: 1, b: 1, a: 0.06}
 --- !u!1001 &5558833241096022884
 PrefabInstance:
   m_ObjectHideFlags: 0

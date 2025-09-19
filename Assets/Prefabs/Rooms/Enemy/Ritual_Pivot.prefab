@@ -628,6 +628,10 @@ PrefabInstance:
       propertyPath: m_SortingOrder
       value: 6
       objectReference: {fileID: 0}
+    - target: {fileID: 3124570844467539542, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
+      propertyPath: m_Layer
+      value: 11
+      objectReference: {fileID: 0}
     - target: {fileID: 4221651176650119774, guid: 0d9cbabf049d4f44a89ff6cc24862bfe, type: 3}
       propertyPath: m_LocalPosition.x
       value: 27.01

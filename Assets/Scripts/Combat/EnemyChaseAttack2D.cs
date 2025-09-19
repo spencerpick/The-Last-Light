@@ -17,28 +17,49 @@ public class EnemyChaseAttack2D : MonoBehaviour
     public float detectionRadius = 6.0f;
     public float loseRadius = 8.0f;
     public float attackRange = 1.15f;
-    [Tooltip("Inside this distance, stop pushing forward so we don't walk on the spot.")]
-    public float holdDistance = 0.75f; // <= attackRange
-    public LayerMask losBlockers;
+    [Tooltip("Inside this distance, stop pushing forward only if LOS is clear (prevents 'stuck at obstacle').")]
+    public float holdDistance = 0.75f;
+    [Tooltip("Which layers block line-of-sight to the player (your walls/props).")]
+    public LayerMask losBlockers = ~0;
 
     [Header("Facing Stabilization (no flicker)")]
-    [Tooltip("Minimum time (seconds) between changes of facing direction.")]
     public float faceChangeCooldown = 0.15f;
-    [Tooltip("Axis hysteresis in world units. The other axis must win by this margin to switch facing (prevents spam).")]
     public float faceAxisHysteresis = 0.20f;
 
-    [Header("Avoidance (optional, mild)")]
-    [Tooltip("If true, will briefly sidestep when LOS is blocked AND we are directly blocked ahead.")]
-    public bool enableAvoidance = false;
-    [Tooltip("How far ahead we check for an obstacle while chasing.")]
-    public float avoidProbeDistance = 0.8f;
-    [Tooltip("How far to offset left/right when testing side clearance.")]
-    public float sideProbeOffset = 0.45f;
-    [Tooltip("Commit to a chosen side step for this long to avoid jitter.")]
-    public float sideCommitSeconds = 0.35f;
+    // ───────────────────────── PATHFINDING ─────────────────────────
+    [Header("Pathfinding (runtime A*)")]
+    public bool useGridPathfinding = true;
+    public float pathCellSize = 0.32f;
+    public Vector2 pathWorldSize = new Vector2(16f, 16f);
+    public LayerMask pathObstacleMask = ~0;
+    public bool pathIncludeTriggers = true;
+    public bool pathAllowDiagonal = false;
+    public float agentRadius = 0.20f;
+    public float pathRecalcInterval = 0.35f;
+    public float waypointReachRadius = 0.18f;
+    [Tooltip("If movement toward a waypoint is blocked, probe this far and slide along the obstacle.")]
+    public float pathSteerProbeDistance = 0.35f;
+    [Tooltip("If true, steer toward the closest point on the current path segment (less jitter in tight spaces).")]
+    public bool steerToSegment = true;
+    [Tooltip("Lateral offset used when hugging around corners along a path segment.")]
+    public float pathLateralOffset = 0.18f;
+    [Header("Corner Escape")]
+    [Tooltip("How long to commit to a corner nudge when stuck on a waypoint.")]
+    public float cornerNudgeSeconds = 0.25f;
+    [Tooltip("Probe distance to evaluate left/right clearance when stuck.")]
+    public float cornerProbeDistance = 0.5f;
+    [Tooltip("When stuck, probe all 8 directions and commit to the one that gets closest to the path.")]
+    public bool useStuckEscape = true;
+    [Tooltip("How long to commit to a stuck-escape direction.")]
+    public float stuckEscapeSeconds = 0.4f;
 
+    [Header("Fallback slide when no path")]
+    public float slideProbeDistance = 0.8f;
+    public float slideCommitSeconds = 0.4f;
+
+    // ───────────────────────── ATTACK ─────────────────────────
     [Header("Attack")]
-    public AttackData attack;               // ScriptableObject
+    public AttackData attack;
     public LayerMask hittableLayers;
     public Transform pivot;
     public string attackTrigger = "Attack";
@@ -49,6 +70,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("On-Hit Stagger")]
     public float staggerSecondsOnHit = 0.3f;
 
+    // ───────────────────────── ANIMATOR ─────────────────────────
     [Header("Animator Params (must match your controller)")]
     public string paramMoveX = "MoveX";
     public string paramMoveY = "MoveY";
@@ -65,8 +87,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("Integration")]
     public EnemyWander2D wanderToToggle;
 
-    [Header("Debug")]
-    public bool verbose = false;
+    [Header("Debug / Test")]
+    public bool forcePathAlways = false;
+    public bool debugDraw = false;
+    public bool debugLog = false;
+    public bool drawPathGrid = true;
+    public Color gridColor = new Color(0f, 1f, 1f, 0.06f);
 
     // ───────── Internals
     Animator animator;
@@ -82,16 +108,30 @@ public class EnemyChaseAttack2D : MonoBehaviour
     readonly Collider2D[] hitBuf = new Collider2D[8];
     readonly HashSet<int> hitThisSwing = new HashSet<int>();
 
-    Vector2 lastFace = Vector2.right;     // current 4-dir facing used by Animator
-    Vector2 prevPos;                      // for actual speed
-    float lastFaceChangeTime = -999f;     // cooldown timer for facing changes
+    Vector2 lastFace = Vector2.right;
+    Vector2 prevPos;
+    float lastFaceChangeTime = -999f;
 
-    // avoidance memory
-    Vector2 committedSide = Vector2.zero;
-    float sideTimer = 0f;
+    // Path
+    readonly List<Vector2> path = new List<Vector2>(64);
+    int pathIndex = 0;
+    float nextPathTime = 0f;
+    Vector3 lastPlayerPos;
+    float waypointStuckTimer = 0f;
+    float lastWaypointDist = 999f;
+    float cornerNudgeTimer = 0f;
+    Vector2 cornerNudgeDir = Vector2.zero;
+    float stuckEscapeTimer = 0f;
+    Vector2 stuckEscapeDir = Vector2.zero;
 
-    // casts: ignore triggers, no layer mask (we ignore self & player manually)
-    ContactFilter2D avoidFilter;
+    // sampling buffer
+    readonly Collider2D[] overlapBuf = new Collider2D[32];
+
+    // slide fallback
+    Vector2 committedSlide = Vector2.zero;
+    float slideTimer = 0f;
+
+    ContactFilter2D castFilter;
 
     const float EPS = 0.01f;
 
@@ -108,11 +148,15 @@ public class EnemyChaseAttack2D : MonoBehaviour
             if (p) player = p.transform;
         }
         prevPos = transform.position;
+        lastPlayerPos = player ? player.position : transform.position;
 
         var hp = GetComponent<Health2D>();
         if (hp) hp.onDamaged.AddListener(OnDamagedStagger);
 
-        avoidFilter = new ContactFilter2D { useLayerMask = false, useTriggers = false };
+        if (pathObstacleMask.value == 0) pathObstacleMask = losBlockers;
+
+        castFilter = new ContactFilter2D { useLayerMask = true, useTriggers = pathIncludeTriggers };
+        castFilter.SetLayerMask(pathObstacleMask);
     }
 
     void OnEnable() => SetState(State.Wander);
@@ -121,57 +165,261 @@ public class EnemyChaseAttack2D : MonoBehaviour
     {
         if (!player) { TryFindPlayer(); return; }
 
-        // real speed (prevents walk-in-place visuals)
         float actualSpeed = ((Vector2)transform.position - prevPos).magnitude / Mathf.Max(Time.fixedDeltaTime, 1e-5f);
         prevPos = transform.position;
 
-        // timers
         if (staggerTimer > 0f) staggerTimer -= Time.fixedDeltaTime;
         if (retreatTimer > 0f) retreatTimer -= Time.fixedDeltaTime;
-        if (sideTimer > 0f) sideTimer -= Time.fixedDeltaTime; else committedSide = Vector2.zero;
+
+        castFilter.useTriggers = pathIncludeTriggers;
+        castFilter.SetLayerMask(pathObstacleMask);
 
         float dist = Vector2.Distance(transform.position, player.position);
-        bool sees = HasLineOfSight();
+        bool losClear = HasLineOfSight();
 
         switch (state)
         {
             case State.Wander:
-                if (dist <= detectionRadius && sees && staggerTimer <= 0f)
+                if (dist <= detectionRadius && staggerTimer <= 0f)
                     SetState(State.Chase);
+                DriveAnim(false, lastFace, 0f);
                 break;
 
             case State.Stunned:
-                // Keep facing stable; show idle while sliding from knockback
                 DriveAnim(false, lastFace, 0f);
                 if (staggerTimer <= 0f) SetState(State.Chase);
                 break;
 
             case State.Chase:
                 {
-                    if (dist > loseRadius || !sees) { SetState(State.Wander); break; }
-                    if (staggerTimer > 0f) { SetState(State.Stunned); break; }
+                    if (dist > loseRadius) { ClearPath(); SetState(State.Wander); break; }
+                    if (staggerTimer > 0f) { ClearPath(); SetState(State.Stunned); break; }
 
-                    // Desired movement towards player (DIAGONAL allowed)
-                    Vector2 moveDir = (player.position - transform.position);
-                    if (moveDir.sqrMagnitude > 1e-6f) moveDir.Normalize(); else moveDir = Vector2.zero;
+                    Vector2 moveDir = Vector2.zero;
+                    bool usingPath = false;
 
-                    bool closeHold = dist <= Mathf.Max(holdDistance, 0.01f);
-                    bool wantToMove = moveDir.sqrMagnitude > 0f && !closeHold;
-
-                    // Optional avoidance: only when LOS is blocked AND we are blocked straight ahead
-                    if (enableAvoidance && wantToMove && !HasLineOfSight() && CastBlocked(moveDir, avoidProbeDistance))
-                        moveDir = ChooseSide(moveDir);
-
-                    // Retreat after swing overrides chasing (move backwards a bit)
-                    Vector2 velocityDir = (retreatTimer > 0f) ? (-lastFace) : moveDir;
-
-                    rb.velocity = wantToMove ? velocityDir * (retreatTimer > 0f ? chaseSpeed * retreatSpeedMultiplier : chaseSpeed)
-                                             : Vector2.zero;
-
-                    // Update facing stably (4-dir), independent of diagonal movement
-                    if (wantToMove)
+                    bool wantPath = useGridPathfinding && (!losClear || forcePathAlways || (path.Count > 0));
+                    if (wantPath)
                     {
-                        Vector2 desiredFace = Snap4(moveDir); // quantize to 4-cardinal
+                        RecalcPathIfNeeded();
+                        if (path.Count > 0 && pathIndex < path.Count)
+                        {
+                            usingPath = true;
+                            Vector2 target = path[pathIndex];
+
+                            // Optional: if next node is roughly aligned and unobstructed, skip current node
+                            if (pathIndex + 1 < path.Count)
+                            {
+                                Vector2 nextNode = path[pathIndex + 1];
+                                if (IsLineClear((Vector2)transform.position, nextNode))
+                                {
+                                    // only skip if it shortens path meaningfully
+                                    float dCur = Vector2.Distance(transform.position, target);
+                                    float dNext = Vector2.Distance(transform.position, nextNode);
+                                    if (dNext + pathCellSize * 0.25f <= dCur)
+                                    {
+                                        pathIndex++;
+                                        target = path[pathIndex];
+                                    }
+                                }
+                            }
+
+                            Vector2 delta = target - (Vector2)transform.position;
+                            float curDist = delta.magnitude;
+
+                            if (curDist <= Mathf.Max(waypointReachRadius, pathCellSize * 0.35f))
+                            {
+                                pathIndex++;
+                                if (pathIndex < path.Count)
+                                {
+                                    target = path[pathIndex];
+                                    delta = target - (Vector2)transform.position;
+                                    curDist = delta.magnitude;
+                                }
+                                waypointStuckTimer = 0f;
+                                lastWaypointDist = 999f;
+                            }
+
+                            // Steer to closest point on current segment to stay in free space
+                            if (steerToSegment && pathIndex > 0)
+                            {
+                                Vector2 a = path[pathIndex - 1];
+                                Vector2 b = target;
+                                Vector2 cp = ClosestPointOnSegment(a, b, (Vector2)transform.position);
+                                Vector2 toCp = cp - (Vector2)transform.position;
+                                if (toCp.sqrMagnitude > (pathCellSize * 0.15f) * (pathCellSize * 0.15f))
+                                {
+                                    delta = toCp;
+                                }
+                            }
+
+                            moveDir = delta.sqrMagnitude > 1e-6f ? delta.normalized : Vector2.zero;
+
+                            // Prefer moving along the segment direction (reduces oscillation near corners)
+                            if (pathIndex > 0)
+                            {
+                                Vector2 a = path[pathIndex - 1];
+                                Vector2 b = target;
+                                Vector2 seg = (b - a);
+                                if (seg.sqrMagnitude > 1e-6f)
+                                {
+                                    Vector2 segDir = seg.normalized;
+                                    // If heading roughly toward the segment but blocked, try small lateral offsets along corridor
+                                    if (IsBlocked(segDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var blk))
+                                    {
+                                        Vector2 perp = new Vector2(-segDir.y, segDir.x);
+                                        Vector2 tryL = (segDir + perp * Mathf.Sign(Vector2.Dot(perp, (Vector2)transform.position - a)) * 0.25f).normalized;
+                                        if (!IsBlocked(tryL, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out _))
+                                            moveDir = tryL;
+                                        else
+                                        {
+                                            Vector2 tryR = (segDir - perp * 0.25f).normalized;
+                                            if (!IsBlocked(tryR, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out _))
+                                                moveDir = tryR;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // If not blocked and we're close to the wall, bias slightly sideways to create clearance
+                                        if (pathLateralOffset > 0f)
+                                        {
+                                            // sample which side has more free space
+                                            Vector2 perp = new Vector2(-segDir.y, segDir.x);
+                                            float lFree = EstimateFreeAlong(perp, pathSteerProbeDistance);
+                                            float rFree = EstimateFreeAlong(-perp, pathSteerProbeDistance);
+                                            if (Mathf.Abs(lFree - rFree) > 0.05f)
+                                            {
+                                                Vector2 bias = (lFree > rFree ? perp : -perp) * Mathf.Min(0.5f, pathLateralOffset);
+                                                moveDir = (segDir + bias).normalized;
+                                            }
+                                            else moveDir = segDir;
+                                        }
+                                        else moveDir = segDir;
+                                    }
+                                }
+                            }
+
+                            // Waypoint progress watchdog: if we fail to reduce distance for a short time, try advancing
+                            if (pathIndex < path.Count)
+                            {
+                                if (curDist < lastWaypointDist - 0.01f) { waypointStuckTimer = 0f; lastWaypointDist = curDist; }
+                                else { waypointStuckTimer += Time.fixedDeltaTime; }
+
+                                if (waypointStuckTimer >= 0.25f && pathIndex + 1 < path.Count)
+                                {
+                                    Vector2 nextNode = path[pathIndex + 1];
+                                    if (IsLineClear((Vector2)transform.position, nextNode))
+                                    {
+                                        pathIndex++;
+                                        target = path[pathIndex];
+                                        delta = target - (Vector2)transform.position;
+                                        curDist = delta.magnitude;
+                                        waypointStuckTimer = 0f;
+                                        lastWaypointDist = curDist + 1f;
+                                    }
+                                    else
+                                    {
+                                        // Try corner nudge first, then full stuck escape if that fails
+                                        Vector2 a = path[Mathf.Max(0, pathIndex - 1)];
+                                        Vector2 b = target;
+                                        Vector2 seg = (b - a);
+                                        Vector2 segDir = seg.sqrMagnitude > 1e-6f ? seg.normalized : (delta.sqrMagnitude > 0f ? delta.normalized : Vector2.right);
+                                        Vector2 nudge = ChooseCornerNudge(segDir, Mathf.Max(cornerProbeDistance, pathCellSize * 0.8f));
+                                        if (nudge.sqrMagnitude > 0f)
+                                        {
+                                            cornerNudgeDir = nudge;
+                                            cornerNudgeTimer = Mathf.Max(0.05f, cornerNudgeSeconds);
+                                        }
+                                        else if (useStuckEscape)
+                                        {
+                                            Vector2 escape = FindBestEscapeDirection(target, Mathf.Max(cornerProbeDistance, pathCellSize * 0.8f));
+                                            if (escape.sqrMagnitude > 0f)
+                                            {
+                                                stuckEscapeDir = escape;
+                                                stuckEscapeTimer = Mathf.Max(0.1f, stuckEscapeSeconds);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (cornerNudgeTimer > 0f && cornerNudgeDir.sqrMagnitude > 0f)
+                            {
+                                cornerNudgeTimer -= Time.fixedDeltaTime;
+                                moveDir = cornerNudgeDir;
+                            }
+                            else if (stuckEscapeTimer > 0f && stuckEscapeDir.sqrMagnitude > 0f)
+                            {
+                                stuckEscapeTimer -= Time.fixedDeltaTime;
+                                moveDir = stuckEscapeDir;
+                            }
+
+                            // Micro-avoidance while following path: if immediate move is blocked, slide along obstacle
+                            if (moveDir.sqrMagnitude > 0f && IsBlocked(moveDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var wpHit))
+                            {
+                                var slide = ChooseSlide(moveDir, wpHit);
+                                if (slide.sqrMagnitude > 0f) moveDir = slide;
+                            }
+
+                            if (!forcePathAlways && HasLineOfSight() && dist <= Mathf.Max(attackRange, holdDistance) * 1.25f)
+                            {
+                                ClearPath();
+                                usingPath = false;
+                            }
+                            else
+                            {
+                                // path in use ⇒ no slide fallback
+                                committedSlide = Vector2.zero;
+                                slideTimer = 0f;
+                            }
+                        }
+                    }
+
+                    if (!usingPath)
+                    {
+                        ClearPath();
+
+                        Vector2 toPlayer = player.position - transform.position;
+                        moveDir = toPlayer.sqrMagnitude > 1e-6f ? toPlayer.normalized : Vector2.zero;
+
+                        bool closeHold = (dist <= Mathf.Max(holdDistance, 0.01f)) && losClear;
+                        if (closeHold) moveDir = Vector2.zero;
+
+                        if (!losClear && moveDir.sqrMagnitude > 0f)
+                        {
+                            if (slideTimer <= 0f || committedSlide == Vector2.zero)
+                            {
+                                if (IsBlocked(moveDir, slideProbeDistance, out var hit))
+                                {
+                                    committedSlide = ChooseSlide(moveDir, hit);
+                                    slideTimer = slideCommitSeconds;
+                                    if (debugLog) Debug.Log($"[{name}] Slide fallback → {committedSlide}");
+                                }
+                            }
+                            else slideTimer -= Time.fixedDeltaTime;
+
+                            if (committedSlide != Vector2.zero)
+                                moveDir = committedSlide;
+
+                            if (HasLineOfSight())
+                            {
+                                committedSlide = Vector2.zero;
+                                slideTimer = 0f;
+                            }
+                        }
+                        else
+                        {
+                            committedSlide = Vector2.zero;
+                            slideTimer = 0f;
+                        }
+                    }
+
+                    float speed = (retreatTimer > 0f ? chaseSpeed * retreatSpeedMultiplier : chaseSpeed);
+                    rb.velocity = moveDir * speed;
+
+                    if (moveDir.sqrMagnitude > 0f)
+                    {
+                        Vector2 desiredFace = Snap4(moveDir);
                         desiredFace = ApplyFaceStabilization(desiredFace, lastFace, faceAxisHysteresis, faceChangeCooldown);
                         if (desiredFace != lastFace)
                         {
@@ -180,13 +428,21 @@ public class EnemyChaseAttack2D : MonoBehaviour
                         }
                     }
 
-                    // Drive animator from actual motion; facing from lastFace
-                    DriveAnim(wantToMove && actualSpeed > 0.01f, lastFace, actualSpeed);
+                    DriveAnim(rb.velocity.sqrMagnitude > 0.0001f, lastFace, actualSpeed);
 
-                    // Attack if allowed
                     bool canAttack = retreatTimer <= 0f && staggerTimer <= 0f && Time.time >= nextReadyTime;
                     if (canAttack && dist <= attackRange)
                         StartAttack(lastFace);
+
+                    if (debugDraw)
+                    {
+                        Debug.DrawLine(transform.position, player.position, losClear ? Color.green : Color.red, Time.fixedDeltaTime);
+                        if (path.Count > 0)
+                            for (int i = 0; i < path.Count - 1; i++)
+                                Debug.DrawLine(path[i], path[i + 1], Color.cyan, Time.fixedDeltaTime);
+                        if (committedSlide != Vector2.zero)
+                            Debug.DrawLine(transform.position, (Vector2)transform.position + committedSlide, Color.yellow, Time.fixedDeltaTime);
+                    }
                     break;
                 }
 
@@ -204,23 +460,90 @@ public class EnemyChaseAttack2D : MonoBehaviour
         }
     }
 
-    // ───────────────────── Facing helpers (stable 4-dir)
+    // ───────── Path helpers
+    void RecalcPathIfNeeded()
+    {
+        if (!useGridPathfinding) return;
+
+        bool targetMoved = (player.position - lastPlayerPos).sqrMagnitude > (pathCellSize * pathCellSize);
+        float interval = forcePathAlways ? Mathf.Min(0.2f, pathRecalcInterval) : pathRecalcInterval;
+
+        if (Time.time < nextPathTime && !targetMoved && path.Count > 0) return;
+
+        lastPlayerPos = player.position;
+        nextPathTime = Time.time + Mathf.Max(0.1f, interval);
+
+        string diag;
+        bool ok = LitePath.FindPath(
+            start: transform.position,
+            goal: player.position,
+            cellSize: Mathf.Max(0.1f, pathCellSize),
+            worldSize: new Vector2(Mathf.Max(4f, pathWorldSize.x), Mathf.Max(4f, pathWorldSize.y)),
+            obstacleMask: pathObstacleMask.value == 0 ? losBlockers : pathObstacleMask,
+            agentRadius: Mathf.Max(0.05f, agentRadius),
+            allowDiagonal: pathAllowDiagonal,
+            includeTriggers: pathIncludeTriggers,
+            ignoreA: bodyCol,
+            ignoreB: player,
+            outPath: path,
+            overlapBuf: overlapBuf,
+            out diag
+        );
+
+        pathIndex = 0;
+        if (debugLog) Debug.Log($"[{name}] Path {(ok ? "OK" : "FAIL")} – {diag}");
+    }
+
+    void ClearPath() { path.Clear(); pathIndex = 0; }
+
+    // ───────── Slide helpers
+    bool IsBlocked(Vector2 dir, float dist, out RaycastHit2D firstHit)
+    {
+        firstHit = default;
+        if (dir.sqrMagnitude < 1e-6f || bodyCol == null) return false;
+
+        var results = new RaycastHit2D[10];
+        int hits = bodyCol.Cast(dir.normalized, castFilter, results, dist);
+        float bestDist = float.MaxValue;
+        RaycastHit2D best = default;
+
+        for (int i = 0; i < hits; i++)
+        {
+            var h = results[i];
+            if (!h.collider) continue;
+            if (h.collider == bodyCol) continue;
+            if (player && h.collider.transform == player) continue;
+            if (h.distance < bestDist) { bestDist = h.distance; best = h; }
+        }
+
+        if (best.collider != null) { firstHit = best; return true; }
+        return false;
+    }
+
+    Vector2 ChooseSlide(Vector2 desiredDir, RaycastHit2D hit)
+    {
+        Vector2 n = hit.normal.normalized;
+        Vector2 t1 = new Vector2(-n.y, n.x);
+        Vector2 t2 = -t1;
+        float d1 = Vector2.Dot(t1, desiredDir);
+        float d2 = Vector2.Dot(t2, desiredDir);
+        Vector2 slide = (d1 >= d2) ? t1 : t2;
+        if (Vector2.Dot(slide, desiredDir) < 0f) slide = -slide;
+        return slide.normalized;
+    }
+
+    // ───────── Facing helpers
     Vector2 Snap4(Vector2 v)
     {
-        // choose the nearest cardinal (no diagonal facing)
-        if (Mathf.Abs(v.x) >= Mathf.Abs(v.y))
-            return new Vector2(Mathf.Sign(v.x), 0f);
-        else
-            return new Vector2(0f, Mathf.Sign(v.y));
+        if (Mathf.Abs(v.x) >= Mathf.Abs(v.y)) return new Vector2(Mathf.Sign(v.x), 0f);
+        else return new Vector2(0f, Mathf.Sign(v.y));
     }
 
     Vector2 ApplyFaceStabilization(Vector2 desired, Vector2 current, float axisHysteresisUnits, float cooldownSeconds)
     {
-        // Cooldown: refuse to change facing too often
         if (Time.time < lastFaceChangeTime + Mathf.Max(0f, cooldownSeconds))
             return current;
 
-        // Axis hysteresis: stick to current axis unless other axis wins by a margin
         bool currentIsHoriz = Mathf.Abs(current.x) > Mathf.Abs(current.y);
         Vector2 toPlayer = player ? (Vector2)(player.position - transform.position) : Vector2.zero;
 
@@ -229,77 +552,22 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
         if (currentIsHoriz)
         {
-            // stay horizontal unless vertical exceeds by margin
-            if (ay <= ax + axisHysteresisUnits)
-                return current;
+            if (ay <= ax + axisHysteresisUnits) return current;
         }
         else
         {
-            // stay vertical unless horizontal exceeds by margin
-            if (ax <= ay + axisHysteresisUnits)
-                return current;
+            if (ax <= ay + axisHysteresisUnits) return current;
         }
-
         return desired;
     }
 
-    // ───────────────────── Avoidance (optional & mild, committed)
-    Vector2 ChooseSide(Vector2 forward)
-    {
-        if (committedSide.sqrMagnitude > 0.001f) return committedSide;
-
-        Vector2 left = new Vector2(-forward.y, forward.x);
-        Vector2 right = new Vector2(forward.y, -forward.x);
-
-        float leftScore = SideClearance(forward, left);
-        float rightScore = SideClearance(forward, right);
-
-        committedSide = (leftScore >= rightScore) ? left : right;
-        sideTimer = sideCommitSeconds;
-
-        return committedSide;
-    }
-
-    bool CastBlocked(Vector2 dir, float dist)
-    {
-        if (dir.sqrMagnitude < 0.0001f || bodyCol == null) return false;
-        var results = new RaycastHit2D[6];
-        int hits = bodyCol.Cast(dir.normalized, avoidFilter, results, dist);
-        for (int i = 0; i < hits; i++)
-        {
-            var h = results[i];
-            if (!h.collider) continue;
-            if (h.collider == bodyCol) continue;
-            if (player && h.collider.transform == player) continue; // player isn’t an obstacle
-            return true;
-        }
-        return false;
-    }
-
-    float SideClearance(Vector2 forward, Vector2 side)
-    {
-        if (bodyCol == null) return 0f;
-        var results = new RaycastHit2D[6];
-
-        // sideways peek
-        int sideHits = bodyCol.Cast(side.normalized, avoidFilter, results, sideProbeOffset);
-        float sideFree = sideHits == 0 ? sideProbeOffset : results[0].distance;
-
-        // forward look
-        int fHits = bodyCol.Cast(forward.normalized, avoidFilter, results, avoidProbeDistance);
-        float fFree = fHits == 0 ? avoidProbeDistance : results[0].distance;
-
-        // favor forward space heavily
-        return fFree * 0.85f + sideFree * 0.15f;
-    }
-
-    // ───────────────────── State helpers, attacks, events
+    // ───────── State / attack / utils
     void SetState(State s)
     {
         if (state == s) return;
         state = s;
         if (wanderToToggle) wanderToToggle.enabled = (state == State.Wander);
-        if (verbose) Debug.Log($"[EnemyChaseAttack2D] {name} → {state}");
+        if (debugLog) Debug.Log($"[{name}] STATE → {state}");
     }
 
     void StartAttack(Vector2 faceDir)
@@ -317,6 +585,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
         SetState(State.Attacking);
         DriveAnim(false, lastFace, 0f);
         if (!string.IsNullOrEmpty(attackTrigger)) animator.SetTrigger(attackTrigger);
+
+        if (debugLog) Debug.Log($"[{name}] ATTACK start");
     }
 
     public void AnimationHitWindow()
@@ -343,6 +613,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
             var info = new HitInfo(attack.damage, kb, c.ClosestPoint(center), gameObject, attack);
             dmg.ReceiveHit(in info);
         }
+
+        if (debugLog) Debug.Log($"[{name}] HIT WINDOW hits={hitThisSwing.Count}");
     }
 
     public void AnimationAttackEnd() => ForceEndAttack();
@@ -372,6 +644,9 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
         if (state == State.Attacking) { state = State.Chase; }
         SetState(State.Stunned);
+        ClearPath();
+        committedSlide = Vector2.zero;
+        slideTimer = 0f;
     }
 
     void DriveAnim(bool moving, Vector2 face, float speedMag)
@@ -396,4 +671,99 @@ public class EnemyChaseAttack2D : MonoBehaviour
         var hit = Physics2D.Linecast(a, b, losBlockers);
         return !hit;
     }
+
+    bool IsLineClear(Vector2 a, Vector2 b)
+    {
+        if (pathObstacleMask.value == 0) return true;
+        var hit = Physics2D.Linecast(a, b, pathObstacleMask);
+        return !hit;
+    }
+
+    float EstimateFreeAlong(Vector2 dir, float distance)
+    {
+        if (bodyCol == null) return distance;
+        var results = new RaycastHit2D[6];
+        int hits = bodyCol.Cast(dir.normalized, castFilter, results, distance);
+        float best = distance;
+        for (int i = 0; i < hits; i++)
+        {
+            var h = results[i];
+            if (!h.collider) continue;
+            if (h.collider == bodyCol) continue;
+            if (player && h.collider.transform == player) continue;
+            if (h.distance < best) best = h.distance;
+        }
+        return Mathf.Max(0f, best);
+    }
+
+    Vector2 ChooseCornerNudge(Vector2 along, float probe)
+    {
+        Vector2 perp = new Vector2(-along.y, along.x);
+        float leftFree = EstimateFreeAlong(perp, probe);
+        float rightFree = EstimateFreeAlong(-perp, probe);
+        // Prefer the freer side; if both tiny, return zero and let slide handle it
+        if (leftFree < 0.05f && rightFree < 0.05f) return Vector2.zero;
+        Vector2 chosen = (leftFree >= rightFree ? perp : -perp);
+        return chosen.normalized;
+    }
+
+    Vector2 FindBestEscapeDirection(Vector2 target, float probe)
+    {
+        Vector2 current = transform.position;
+        Vector2[] dirs = {
+            Vector2.up, Vector2.down, Vector2.left, Vector2.right,
+            new Vector2(1, 1).normalized, new Vector2(1, -1).normalized,
+            new Vector2(-1, 1).normalized, new Vector2(-1, -1).normalized
+        };
+        
+        float bestScore = -1f;
+        Vector2 bestDir = Vector2.zero;
+        
+        foreach (var dir in dirs)
+        {
+            float free = EstimateFreeAlong(dir, probe);
+            if (free < 0.1f) continue; // Skip blocked directions
+            
+            // Score: how much closer does this direction get us to target?
+            Vector2 testPos = current + dir * Mathf.Min(free, probe * 0.5f);
+            float distToTarget = Vector2.Distance(testPos, target);
+            float currentDist = Vector2.Distance(current, target);
+            float improvement = currentDist - distToTarget;
+            
+            // Prefer directions that get us closer to target
+            float score = improvement + free * 0.1f; // Bonus for more free space
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestDir = dir;
+            }
+        }
+        
+        return bestDir;
+    }
+
+    static Vector2 ClosestPointOnSegment(Vector2 a, Vector2 b, Vector2 p)
+    {
+        Vector2 ab = b - a;
+        float t = Vector2.Dot(p - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude);
+        t = Mathf.Clamp01(t);
+        return a + ab * t;
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (!drawPathGrid || !useGridPathfinding || !player) return;
+        Vector3 center = (transform.position + player.position) * 0.5f;
+        Gizmos.color = gridColor;
+        Gizmos.DrawCube(center, new Vector3(pathWorldSize.x, pathWorldSize.y, 0.01f));
+
+        if (path != null && path.Count > 0)
+        {
+            Gizmos.color = Color.cyan;
+            for (int i = 0; i < path.Count; i++)
+                Gizmos.DrawSphere(path[i], 0.06f);
+        }
+    }
+#endif
 }

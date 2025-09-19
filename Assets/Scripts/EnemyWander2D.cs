@@ -51,6 +51,14 @@ public class EnemyWander2D : MonoBehaviour
     static readonly string[] AltY = { "MoveY", "DirY", "Vertical" };
     static readonly string[] AltS = { "Speed", "speed" };
 
+    // ─────────────────────── Debug / Gizmos
+    [Header("Debug / Gizmos")]
+    [Tooltip("Draw the bound room as a green rectangle in the Scene view.")]
+    public bool showRoomGizmo = false;
+    [Tooltip("Draw the current wander direction ray.")]
+    public bool showDirectionGizmo = true;
+    public Color roomGizmoColor = new Color(0f, 1f, 0f, 0.15f);
+
     // internals
     Rigidbody2D rb;
     Collider2D bodyCollider;
@@ -350,15 +358,35 @@ public class EnemyWander2D : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    void OnDrawGizmosSelected()
+    void OnDrawGizmos()
     {
-        if (boundRoom != null)
+        // draw whenever you want (not only when selected), but toggleable
+        if (showRoomGizmo && boundRoom != null)
         {
-            Gizmos.color = new Color(0, 1, 0, 0.15f);
+            Gizmos.color = roomGizmoColor;
             var b = boundRoom.bounds;
             Gizmos.DrawCube(b.center, new Vector3(b.size.x, b.size.y, 0.01f));
         }
-        if (bodyCollider != null)
+
+        if (showDirectionGizmo && bodyCollider != null)
+        {
+            Gizmos.color = Color.white;
+            Gizmos.DrawLine(bodyCollider.bounds.center,
+                bodyCollider.bounds.center + (Vector3)(dir.normalized * 0.5f));
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        // also show when selected, if toggled on
+        if (showRoomGizmo && boundRoom != null)
+        {
+            Gizmos.color = roomGizmoColor;
+            var b = boundRoom.bounds;
+            Gizmos.DrawCube(b.center, new Vector3(b.size.x, b.size.y, 0.01f));
+        }
+
+        if (showDirectionGizmo && bodyCollider != null)
         {
             Gizmos.color = Color.white;
             Gizmos.DrawLine(bodyCollider.bounds.center,
