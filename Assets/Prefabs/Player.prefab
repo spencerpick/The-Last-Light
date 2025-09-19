@@ -112,9 +112,10 @@ GameObject:
   - component: {fileID: 1533472774300437716}
   - component: {fileID: 7481596076659416281}
   - component: {fileID: 4339823345574679209}
-  - component: {fileID: 2087811835131132383}
   - component: {fileID: 7952627984352608095}
   - component: {fileID: 5660823728027536056}
+  - component: {fileID: 2087811835131132383}
+  - component: {fileID: 7787687653547806778}
   - component: {fileID: 4570387775254855207}
   - component: {fileID: 8835007505654805709}
   - component: {fileID: 2688740933595881903}
@@ -221,20 +222,6 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 1
   m_Constraints: 4
---- !u!114 &2087811835131132383
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2210471384161370293}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a6828f02e9be1b648803b95cbdd32e72, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  walkSpeed: 3.25
-  quickSpeed: 4.5
 --- !u!95 &7952627984352608095
 Animator:
   serializedVersion: 5
@@ -291,6 +278,49 @@ CapsuleCollider2D:
   m_Offset: {x: 0.0028814143, y: -0.017626073}
   m_Size: {x: 0.17319937, y: 0.263187}
   m_Direction: 0
+--- !u!114 &2087811835131132383
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2210471384161370293}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6828f02e9be1b648803b95cbdd32e72, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  walkSpeed: 3.25
+  quickSpeed: 4.5
+  useStaminaForSprint: 1
+  sprintKey: 304
+  sprintStaminaPerSecond: 20
+  minStaminaToStartSprint: 5
+--- !u!114 &7787687653547806778
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2210471384161370293}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4aad07d70fa9674408aadf5615e2c9e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxStamina: 100
+  currentStamina: 100
+  regenPerSecond: 20
+  regenDelayAfterUse: 1
+  onStaminaChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onDepleted:
+    m_PersistentCalls:
+      m_Calls: []
+  onFull:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &4570387775254855207
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -8,16 +8,25 @@ public class PlayerMovement : MonoBehaviour
     public float walkSpeed = 2f;
     public float quickSpeed = 3.5f;
 
+    [Header("Sprint / Stamina")]
+    public bool useStaminaForSprint = true;
+    public KeyCode sprintKey = KeyCode.LeftShift;
+    public float sprintStaminaPerSecond = 20f;     // drain while sprinting
+    public float minStaminaToStartSprint = 5f;     // need at least this to begin sprinting
+
     private Rigidbody2D rb;
     private Animator animator;
+    private Stamina stamina;
     private Vector2 moveInput;
     private Vector2 lastMoveDirection;
     private float currentSpeed;
+    private bool isSprinting;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
+        stamina = GetComponent<Stamina>();
         lastMoveDirection = new Vector2(0, -1); // Default facing down
     }
 
@@ -33,11 +42,36 @@ public class PlayerMovement : MonoBehaviour
 
         moveInput = new Vector2(inputX, inputY).normalized;
 
-        // Toggle between speeds
-        currentSpeed = Input.GetKey(KeyCode.LeftShift) ? quickSpeed : walkSpeed;
-
+        bool wantsSprint = Input.GetKey(sprintKey);
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
+
+        // Sprint logic (drain stamina only while moving)
+        isSprinting = false;
+        if (isMoving && wantsSprint)
+        {
+            if (!useStaminaForSprint)
+            {
+                isSprinting = true;
+            }
+            else if (stamina != null)
+            {
+                // must have enough stamina to start/continue sprinting
+                if (stamina.currentStamina >= (isSprinting ? 0.5f : minStaminaToStartSprint))
+                {
+                    // try to drain (returns false if not enough this frame)
+                    if (stamina.ConsumePerSecond(sprintStaminaPerSecond))
+                    {
+                        isSprinting = true;
+                    }
+                }
+            }
+        }
+
+        // Toggle between speeds
+        currentSpeed = isSprinting ? quickSpeed : walkSpeed;
+
         animator.SetBool("IsMoving", isMoving);
+        animator.SetBool("IsSprinting", isSprinting);
 
         if (isMoving)
         {
