@@ -172,7 +172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.5644208, g: 0.6367924, b: 0.2613252, a: 1}
+  m_Color: {r: 0.25, g: 1, b: 0.5, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -250,10 +250,15 @@ MonoBehaviour:
   health: {fileID: 0}
   stamina: {fileID: 0}
   healthFill: {fileID: 1227633573}
+  staminaFill: {fileID: 63130616}
+  useStaticColors: 1
+  healthColor: {r: 1, g: 0.15, b: 0.15, a: 1}
+  staminaColor: {r: 0.25, g: 1, b: 0.5, a: 1}
+  useGradient: 0
   healthGradient:
     serializedVersion: 2
-    key0: {r: 1, g: 1, b: 1, a: 1}
-    key1: {r: 1, g: 1, b: 1, a: 1}
+    key0: {r: 1, g: 0, b: 0, a: 1}
+    key1: {r: 0, g: 1, b: 0, a: 1}
     key2: {r: 0, g: 0, b: 0, a: 0}
     key3: {r: 0, g: 0, b: 0, a: 0}
     key4: {r: 0, g: 0, b: 0, a: 0}
@@ -280,12 +285,10 @@ MonoBehaviour:
     m_ColorSpace: -1
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
-  lowHealthThreshold: 0.25
-  staminaFill: {fileID: 63130616}
   staminaGradient:
     serializedVersion: 2
-    key0: {r: 1, g: 1, b: 1, a: 1}
-    key1: {r: 1, g: 1, b: 1, a: 1}
+    key0: {r: 0.90308213, g: 1, b: 0, a: 1}
+    key1: {r: 0, g: 1, b: 0, a: 1}
     key2: {r: 0, g: 0, b: 0, a: 0}
     key3: {r: 0, g: 0, b: 0, a: 0}
     key4: {r: 0, g: 0, b: 0, a: 0}
@@ -312,19 +315,18 @@ MonoBehaviour:
     m_ColorSpace: -1
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
-  lowStaminaThreshold: 0.15
   anchorCorner: 0
   padding: {x: 16, y: 16}
   healthSize: {x: 240, y: 22}
   staminaSize: {x: 240, y: 14}
   barSpacing: 6
-  alwaysVisible: 1
   smoothLerp: 1
   lerpSpeed: 10
+  lowHealthThreshold: 0.25
   pulseLowHealth: 1
-  pulseLowStamina: 0
   pulseSpeed: 3.2
   pulseAmplitude: 0.06
+  rebindInterval: 0.5
 --- !u!1 &178249547
 GameObject:
   m_ObjectHideFlags: 0
@@ -560,10 +562,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0.20677036
-    y: 0.20650406
-    width: 0.58554435
-    height: 0.58536583
+    x: 0.21580817
+    y: 0.21625887
+    width: 0.5683837
+    height: 0.5682715
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34
@@ -971,7 +973,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 0.15, b: 0.15, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
