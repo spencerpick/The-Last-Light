@@ -28,6 +28,14 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("Facing Stabilization (no flicker)")]
     public float faceChangeCooldown = 0.15f;
     public float faceAxisHysteresis = 0.20f;
+    [Tooltip("When true, during Wander or external-controlled flee we face exactly the movement direction (no cooldown/hysteresis).")]
+    public bool forceFaceToMovementOnWanderAndFlee = true;
+    [Tooltip("When moving, clamp animator 'Speed' to be at least this to prevent Idle gliding due to tiny velocities.")]
+    public float animWalkSpeedFloor = 0.1f;
+    [Tooltip("If true, drive Speed as 1 when moving and 0 when stopped during flee/wander.")]
+    public bool useBinarySpeedParam = true;
+    [Tooltip("If false, we will set animator parameters without checking existence (useful if Animator.parameters is empty at runtime).")]
+    public bool strictAnimatorParams = false;
 
     // ───────────────────────── PATHFINDING ─────────────────────────
     [Header("Pathfinding (runtime A*)")]
@@ -90,6 +98,10 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("Integration")]
     public EnemyWander2D wanderToToggle;
 
+	[Header("Auto-tuning (per enemy)")]
+	[Tooltip("If enabled, adjusts path/steering radii from this enemy's collider so larger enemies avoid scraping walls without hand-tuning.")]
+	public bool autoTuneByCollider = true;
+
     [Header("Debug / Test")]
     public bool forcePathAlways = false;
     public bool debugDraw = false;
@@ -100,6 +112,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("External Control (AI overrides)")]
     [Tooltip("When true, external logic (e.g., flee) owns the movement. Prevents auto-switch to Wander by loseRadius.")]
     public bool externalControlActive = false;
+    [Tooltip("If true, this component drives animator during Wander. If false, leave Wander animation to EnemyWander2D.")]
+    public bool driveAnimatorInWander = false;
 
     // ───────── Internals
     Animator animator;
@@ -118,6 +132,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
     Vector2 lastFace = Vector2.right;
     Vector2 prevPos;
     float lastFaceChangeTime = -999f;
+    Vector2 lastVelocityForAnim = Vector2.zero;
 
     // Path
     public readonly List<Vector2> path = new List<Vector2>(64);
@@ -154,7 +169,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
             var p = GameObject.FindGameObjectWithTag("Player");
             if (p) player = p.transform;
         }
-        prevPos = transform.position;
+		prevPos = transform.position;
         lastPlayerPos = player ? player.position : transform.position;
 
         var hp = GetComponent<Health2D>();
@@ -162,9 +177,48 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
         if (pathObstacleMask.value == 0) pathObstacleMask = losBlockers;
 
-        castFilter = new ContactFilter2D { useLayerMask = true, useTriggers = pathIncludeTriggers };
+		castFilter = new ContactFilter2D { useLayerMask = true, useTriggers = pathIncludeTriggers };
         castFilter.SetLayerMask(pathObstacleMask);
+
+		if (autoTuneByCollider) AutoTuneFromColliderSize();
     }
+
+	void AutoTuneFromColliderSize()
+	{
+		if (bodyCol == null) return;
+		var b = bodyCol.bounds;
+		float halfMin = Mathf.Max(0.01f, Mathf.Min(b.extents.x, b.extents.y));
+		// Conservative: base on 50% of min half-extent + a tiny margin, hard-capped
+		float recommendedRadius = Mathf.Clamp(halfMin * 0.5f + 0.02f, 0.12f, 0.35f);
+		agentRadius = Mathf.Clamp(Mathf.Max(agentRadius, recommendedRadius), 0.08f, 0.35f);
+
+		// Cell size ~1.6x radius, capped to corridor-friendly width
+		float minCell = Mathf.Clamp(agentRadius * 1.6f, 0.24f, 0.50f);
+		if (pathCellSize < minCell) pathCellSize = minCell;
+		if (pathCellSize > 0.50f) pathCellSize = 0.50f;
+
+		// Waypoint reach scaled with cell size to prevent jitter
+		float minReach = Mathf.Clamp(pathCellSize * 0.50f, 0.15f, 0.45f);
+		if (waypointReachRadius < minReach) waypointReachRadius = minReach;
+
+		// Probing/steering scaled modestly
+		float minSteerProbe = Mathf.Clamp(agentRadius * 2.5f, 0.50f, 1.20f);
+		if (pathSteerProbeDistance < minSteerProbe) pathSteerProbeDistance = minSteerProbe;
+
+		float minLateral = Mathf.Clamp(agentRadius * 0.50f, 0.12f, 0.35f);
+		if (pathLateralOffset < minLateral) pathLateralOffset = minLateral;
+
+		float minCornerProbe = Mathf.Clamp(agentRadius * 1.8f, 0.50f, 1.30f);
+		if (cornerProbeDistance < minCornerProbe) cornerProbeDistance = minCornerProbe;
+
+		float minSlideProbe = Mathf.Clamp(agentRadius * 3.0f, 0.70f, 1.40f);
+		if (slideProbeDistance < minSlideProbe) slideProbeDistance = minSlideProbe;
+
+		// Modest commit increases only
+		cornerNudgeSeconds = Mathf.Max(cornerNudgeSeconds, 0.30f);
+		stuckEscapeSeconds = Mathf.Max(stuckEscapeSeconds, 0.55f);
+		slideCommitSeconds = Mathf.Max(slideCommitSeconds, 0.50f);
+	}
 
     void OnEnable() => SetState(State.Wander);
 
@@ -190,12 +244,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
                 if (externalControlActive)
                 {
                     SetState(State.Chase);
-                    DriveAnim(false, lastFace, 0f);
+                    if (driveAnimatorInWander) DriveAnim(false, lastFace, 0f);
                     break;
                 }
                 if (dist <= detectionRadius && staggerTimer <= 0f)
                     SetState(State.Chase);
-                DriveAnim(false, lastFace, 0f);
+                if (driveAnimatorInWander) DriveAnim(false, lastFace, 0f);
                 break;
 
             case State.Stunned:
@@ -211,7 +265,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
                     Vector2 moveDir = Vector2.zero;
                     bool usingPath = false;
 
-                    bool wantPath = useGridPathfinding && (!losClear || forcePathAlways || (path.Count > 0));
+		bool wantPath = useGridPathfinding && (!losClear || forcePathAlways || externalControlActive || (path.Count > 0));
                     if (wantPath)
                     {
                         RecalcPathIfNeeded();
@@ -361,9 +415,10 @@ public class EnemyChaseAttack2D : MonoBehaviour
                             }
 
                             // Micro-avoid along walls
-                            if (moveDir.sqrMagnitude > 0f && IsBlocked(moveDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var wpHit))
+							if (moveDir.sqrMagnitude > 0f && IsBlocked(moveDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var wpHit))
                             {
-                                var slide = ChooseSlide(moveDir, wpHit);
+								// For larger agents near walls, bias slide using segment direction if we have one
+								var slide = ChooseSlide(moveDir, wpHit);
                                 if (slide.sqrMagnitude > 0f) moveDir = slide;
                             }
 
@@ -424,16 +479,41 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
                     if (moveDir.sqrMagnitude > 0f)
                     {
-                        Vector2 desiredFace = Snap4(moveDir);
-                        desiredFace = ApplyFaceStabilization(desiredFace, lastFace, faceAxisHysteresis, faceChangeCooldown);
-                        if (desiredFace != lastFace)
+                        // Use velocity if available to drive facing precisely.
+                        Vector2 baseDir = rb ? rb.velocity : moveDir / Mathf.Max(Time.fixedDeltaTime, 1e-4f);
+                        Vector2 desiredFace = Snap4(baseDir);
+                        if (forceFaceToMovementOnWanderAndFlee && (externalControlActive || state == State.Wander))
                         {
-                            lastFace = desiredFace;
-                            lastFaceChangeTime = Time.time;
+                            // For flee and wander, snap immediately to the current movement axis.
+                            if (desiredFace != lastFace)
+                            {
+                                lastFace = desiredFace;
+                                lastFaceChangeTime = Time.time;
+                            }
                         }
+                        else
+                        {
+                            desiredFace = ApplyFaceStabilization(desiredFace, lastFace, faceAxisHysteresis, faceChangeCooldown);
+                            if (desiredFace != lastFace)
+                            {
+                                lastFace = desiredFace;
+                                lastFaceChangeTime = Time.time;
+                            }
+                        }
+
+                        // Also push animator IsMoving if it exists (mirrors wander and keeps BTs consistent)
+                        if (!string.IsNullOrEmpty(paramIsMoving)) animator.SetBool(paramIsMoving, true);
+                        if (!string.IsNullOrEmpty(paramMoveX)) animator.SetFloat(paramMoveX, lastFace.x);
+                        if (!string.IsNullOrEmpty(paramMoveY)) animator.SetFloat(paramMoveY, lastFace.y);
+                        if (!string.IsNullOrEmpty(paramSpeed)) animator.SetFloat(paramSpeed, rb ? rb.velocity.magnitude : moveDir.magnitude * chaseSpeed);
+                    }
+                    else {
+                        if (!string.IsNullOrEmpty(paramIsMoving)) animator.SetBool(paramIsMoving, false);
+                        if (!string.IsNullOrEmpty(paramSpeed)) animator.SetFloat(paramSpeed, 0f);
                     }
 
                     DriveAnim(rb.velocity.sqrMagnitude > 0.0001f, lastFace, actualSpeed);
+                    lastVelocityForAnim = rb ? rb.velocity : moveDir * chaseSpeed;
 
                     bool canAttack = retreatTimer <= 0f && staggerTimer <= 0f && Time.time >= nextReadyTime;
 
@@ -464,6 +544,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
             case State.Attacking:
                 rb.velocity = Vector2.zero;
                 DriveAnim(false, lastFace, 0f);
+                lastVelocityForAnim = Vector2.zero;
 
                 attackTimer += Time.fixedDeltaTime;
                 var st = animator.GetCurrentAnimatorStateInfo(animatorLayerIndex);
@@ -472,6 +553,34 @@ public class EnemyChaseAttack2D : MonoBehaviour
                 bool timedOut = attackTimer >= attackFailSafeTimeout;
                 if (clipEnded || timedOut) ForceEndAttack();
                 break;
+        }
+    }
+
+    void Update()
+    {
+        // Only drive animator here during chase/flee (or if explicitly allowed for wander).
+        if (!animator) return;
+        if (!(externalControlActive || state == State.Chase || driveAnimatorInWander)) return;
+
+        Vector2 vel = lastVelocityForAnim;
+        bool moving = vel.sqrMagnitude > 1e-6f;
+        if (moving)
+        {
+            Vector2 desiredFace = Snap4(vel);
+            if (forceFaceToMovementOnWanderAndFlee && (externalControlActive || state == State.Wander))
+                lastFace = desiredFace;
+
+            // Write animator params unconditionally (param names are configured on this component)
+            animator.SetFloat(paramMoveX, lastFace.x);
+            animator.SetFloat(paramMoveY, lastFace.y);
+            float sp = useBinarySpeedParam ? 1f : Mathf.Max(animWalkSpeedFloor, vel.magnitude);
+            animator.SetFloat(paramSpeed, sp);
+            if (!string.IsNullOrEmpty(paramIsMoving)) animator.SetBool(paramIsMoving, true);
+        }
+        else
+        {
+            animator.SetFloat(paramSpeed, 0f);
+            if (!string.IsNullOrEmpty(paramIsMoving)) animator.SetBool(paramIsMoving, false);
         }
     }
 
@@ -508,6 +617,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
         nextPathTime = Time.time + Mathf.Max(0.1f, interval);
 
         string diag;
+        // Calculate into a temporary path and adopt only if beneficial. This avoids "path ping-pong" when grids shift.
+        var newPath = new List<Vector2>(64);
         bool ok = LitePath.FindPath(
             start: transform.position,
             goal: player.position,
@@ -519,13 +630,63 @@ public class EnemyChaseAttack2D : MonoBehaviour
             includeTriggers: pathIncludeTriggers,
             ignoreA: bodyCol,
             ignoreB: player,
-            outPath: path,
+            outPath: newPath,
             overlapBuf: overlapBuf,
             out diag
         );
 
-        pathIndex = 0;
         if (debugLog) Debug.Log($"[{name}] Path {(ok ? "OK" : "FAIL")} – {diag}");
+
+        if (ok)
+        {
+            bool accept = false;
+            if (path.Count == 0) accept = true;
+            else
+            {
+                // Accept if meaningfully shorter or if we are close to start of the new path
+                if (newPath.Count + 2 <= path.Count) accept = true;
+                else
+                {
+                    float dNewStart = Vector2.Distance(transform.position, newPath[0]);
+                    float dCur = Vector2.Distance(transform.position, path[Mathf.Clamp(pathIndex, 0, path.Count - 1)]);
+                    if (dNewStart + pathCellSize * 0.25f < dCur) accept = true;
+                }
+            }
+
+            if (accept)
+            {
+                path.Clear();
+                path.AddRange(newPath);
+                pathIndex = 0;
+            }
+        }
+        else
+        {
+            // Second-chance path: relax constraints a bit to avoid rare corner cases (start/goal touching walls/triggers)
+            var retryPath = new List<Vector2>(64);
+            bool ok2 = LitePath.FindPath(
+                start: transform.position,
+                goal: player.position,
+                cellSize: Mathf.Max(0.1f, pathCellSize),
+                worldSize: new Vector2(Mathf.Max(4f, pathWorldSize.x * 1.25f), Mathf.Max(4f, pathWorldSize.y * 1.25f)),
+                obstacleMask: pathObstacleMask.value == 0 ? losBlockers : pathObstacleMask,
+                agentRadius: Mathf.Max(0.05f, agentRadius * 0.85f),
+                allowDiagonal: pathAllowDiagonal,
+                includeTriggers: false, // ignore triggers on retry
+                ignoreA: bodyCol,
+                ignoreB: player,
+                outPath: retryPath,
+                overlapBuf: overlapBuf,
+                out diag
+            );
+            if (debugLog) Debug.Log($"[{name}] Path RETRY {(ok2 ? "OK" : "FAIL")} – {diag}");
+            if (ok2)
+            {
+                path.Clear();
+                path.AddRange(retryPath);
+                pathIndex = 0;
+            }
+        }
     }
 
     void ClearPath() { path.Clear(); pathIndex = 0; }

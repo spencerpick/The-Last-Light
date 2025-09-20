@@ -52,6 +52,18 @@ public class EnemyFleeController : MonoBehaviour
     [Tooltip("Fallback probe distance for wall-avoidance when not using anchors.")]
     public float steerProbeDistance = 0.7f;
 
+    [Header("Anchor Coordination (multi-enemy)")]
+    [Tooltip("Seconds to reserve an anchor after it is selected so others are less likely to pick it.")]
+    public float anchorReserveSeconds = 4f;
+    [Tooltip("Penalty applied to anchors currently reserved (0..1 where lower = stronger penalty).")]
+    [Range(0.1f, 1f)] public float reservedAnchorScoreMultiplier = 0.45f;
+    [Tooltip("Discourage picking anchors already targeted by other fleeing enemies within this radius.")]
+    public float fleeNeighborRadius = 3.0f;
+    [Tooltip("Per neighbor within radius, multiply score by (1 - x). For example 0.25 reduces score by 25% per neighbor.")]
+    [Range(0f, 0.9f)] public float fleeNeighborScorePenalty = 0.25f;
+    [Tooltip("Random jitter added to anchor scores to reduce ties.")]
+    [Range(0f, 0.5f)] public float anchorScoreJitter = 0.12f;
+
     [Header("Integrations")]
     [Tooltip("Disable attacking during flee by detaching AttackData temporarily.")]
     public bool disableAttackDuringFlee = true;
@@ -90,6 +102,16 @@ public class EnemyFleeController : MonoBehaviour
     [Tooltip("Log chosen anchor and path details to the Console while fleeing.")]
     public bool logFleeDebug = true;
 
+    [Header("Visual FX (prototype)")]
+    [Tooltip("Fade the enemy toward invisible while fleeing, then restore on finish.")]
+    public bool fadeDuringFlee = true;
+    [Tooltip("Seconds to fade out when fleeing starts.")]
+    public float fadeOutSeconds = 0.8f;
+    [Tooltip("Seconds to fade back in when fleeing ends.")]
+    public float fadeInSeconds = 0.5f;
+    [Tooltip("Target alpha while fleeing (0=invisible, 1=opaque).")]
+    [Range(0.02f, 1f)] public float fleeTargetAlpha = 0.18f;
+
     // Internals
     Transform originalTarget;
     Transform dummyTarget;
@@ -103,6 +125,9 @@ public class EnemyFleeController : MonoBehaviour
     bool cachedDebugDraw;
     bool cachedDebugLog;
     int isRunningHash;
+
+    // Global, time-based anchor reservations to spread enemies across anchors
+    static readonly Dictionary<Transform, float> s_anchorReservedUntil = new Dictionary<Transform, float>();
 
     void Awake()
     {
@@ -175,8 +200,9 @@ public class EnemyFleeController : MonoBehaviour
         chase.chaseSpeed = Mathf.Max(0.1f, cachedChaseSpeed) * Mathf.Max(1f, runSpeedMultiplier);
         if (forcePathAlwaysDuringFlee) chase.forcePathAlways = true;
 
-        // Animator: run ON
+        // Animator: run ON + start fade
         if (isRunningHash != 0) animator.SetBool(isRunningHash, true);
+        if (fadeDuringFlee) StartCoroutine(FadeSpriteTo(fleeTargetAlpha, Mathf.Max(0.05f, fadeOutSeconds)));
 
         // Pick an anchor far from player & current position
         Transform anchor = PickBestAnchor();
@@ -186,6 +212,9 @@ public class EnemyFleeController : MonoBehaviour
         {
             // Use A* by redirecting EnemyChaseAttack2D to a dummy target placed at the anchor
             dummyTarget.position = anchor.position;
+            // Reserve it briefly so other flee brains down-rank it
+            if (anchorReserveSeconds > 0f)
+                s_anchorReservedUntil[anchor] = Time.time + anchorReserveSeconds;
 
             // Cache + adjust pathfinding envelope so grid spans from current pos to anchor
             cachedPathWorldSize = chase.pathWorldSize;
@@ -204,8 +233,15 @@ public class EnemyFleeController : MonoBehaviour
                 float h = Mathf.Abs(goal.y - start.y) + worldSizeMargin * 2f;
                 w = Mathf.Clamp(w, minWorldSizeDuringFlee.x, maxWorldSizeDuringFlee.x);
                 h = Mathf.Clamp(h, minWorldSizeDuringFlee.y, maxWorldSizeDuringFlee.y);
+                // Snap sizes to multiples of cell size to reduce grid jitter across recalcs
+                float cs = Mathf.Max(0.1f, chase.pathCellSize);
+                w = Mathf.Ceil(w / cs) * cs;
+                h = Mathf.Ceil(h / cs) * cs;
                 chase.pathWorldSize = new Vector2(w, h);
             }
+
+            // Ensure healthbars or other UI children don't affect auto-tuning (exclude UI by tag/layer)
+            // If your health bar is on a child layer like UI, it won't impact collider-based tuning; this comment is a reminder.
 
             chase.player = dummyTarget;
 
@@ -275,10 +311,42 @@ public class EnemyFleeController : MonoBehaviour
         chase.externalControlActive = false;
         if (enableChaseDebugLogDuringFlee) chase.debugLog = cachedDebugLog;
 
-        // Animator: run OFF
+        // Animator: run OFF + restore fade
         if (isRunningHash != 0) animator.SetBool(isRunningHash, false);
+        if (fadeDuringFlee) StartCoroutine(FadeSpriteTo(1f, Mathf.Max(0.05f, fadeInSeconds)));
 
         isFleeing = false;
+    }
+
+    // ---------- Simple sprite/material fade ----------
+    IEnumerator FadeSpriteTo(float targetAlpha, float seconds)
+    {
+        // Try SpriteRenderer on self or children
+        var srs = GetComponentsInChildren<SpriteRenderer>(includeInactive: false);
+        if (srs == null || srs.Length == 0) yield break;
+
+        // Cache starting colors
+        var start = new Color[srs.Length];
+        for (int i = 0; i < srs.Length; i++) start[i] = srs[i].color;
+
+        float t = 0f;
+        while (t < seconds)
+        {
+            t += Time.deltaTime;
+            float k = seconds > 0.0001f ? Mathf.Clamp01(t / seconds) : 1f;
+            for (int i = 0; i < srs.Length; i++)
+            {
+                var c = start[i];
+                c.a = Mathf.Lerp(start[i].a, targetAlpha, k);
+                srs[i].color = c;
+            }
+            yield return null;
+        }
+
+        for (int i = 0; i < srs.Length; i++)
+        {
+            var c = srs[i].color; c.a = targetAlpha; srs[i].color = c;
+        }
     }
 
     // ---------- Anchor Selection ----------
@@ -300,7 +368,7 @@ public class EnemyFleeController : MonoBehaviour
         Vector3 self = transform.position;
         Vector3 playerPos = (chase.player ? chase.player.position : self);
 
-        // rank by: far from player + far from self, with simple exclusions to avoid "same room"
+        // rank by: far from player + far from self, with penalties for reservations and neighbors, plus small jitter
         var ranked = anchors
             .Where(a =>
             {
@@ -315,12 +383,46 @@ public class EnemyFleeController : MonoBehaviour
                 float score = dPlayer * 1.4f + dSelf * 0.6f;
                 // soft preference: make sure it's not extremely close to the player
                 if (dPlayer < preferAnchorFartherThanPlayer) score *= 0.5f;
+
+                // Reservation penalty (time-based)
+                if (s_anchorReservedUntil.TryGetValue(a, out float until) && Time.time < until)
+                    score *= Mathf.Clamp01(reservedAnchorScoreMultiplier);
+
+                // Neighbor flee penalty: other active flee targets nearby
+                if (fleeNeighborScorePenalty > 0f && fleeNeighborRadius > 0.01f)
+                {
+                    int neighbors = CountFleeNeighborsNear(a.position, fleeNeighborRadius);
+                    for (int i = 0; i < neighbors; i++)
+                        score *= Mathf.Clamp01(1f - fleeNeighborScorePenalty);
+                }
+
+                // Random jitter
+                if (anchorScoreJitter > 0f)
+                {
+                    float j = Random.Range(-anchorScoreJitter, anchorScoreJitter);
+                    score *= (1f + j);
+                }
                 return (anchor: a, score);
             })
             .OrderByDescending(x => x.score)
             .ToList();
 
         return ranked.Count > 0 ? ranked[0].anchor : null;
+    }
+
+    static int CountFleeNeighborsNear(Vector3 pos, float radius)
+    {
+        int n = 0;
+        var all = FindObjectsOfType<EnemyFleeController>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            var e = all[i];
+            if (!e || !e.isActiveAndEnabled) continue;
+            if (!e.isFleeing) continue;
+            if (!e.dummyTarget) continue;
+            if (Vector2.Distance(pos, e.dummyTarget.position) <= radius) n++;
+        }
+        return n;
     }
 
     // ---------- Fallback flee without anchors: steer away + avoid walls ----------

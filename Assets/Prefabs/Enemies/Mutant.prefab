@@ -309,6 +309,13 @@ MonoBehaviour:
   agentRadius: 0.2
   pathRecalcInterval: 0.35
   waypointReachRadius: 0.18
+  pathSteerProbeDistance: 0.35
+  steerToSegment: 1
+  pathLateralOffset: 0.18
+  cornerNudgeSeconds: 0.25
+  cornerProbeDistance: 0.5
+  useStuckEscape: 1
+  stuckEscapeSeconds: 0.4
   slideProbeDistance: 0.8
   slideCommitSeconds: 0.4
   attack: {fileID: 11400000, guid: ec344aec6d671dd4fa464d5a6fcedd29, type: 2}
@@ -331,11 +338,14 @@ MonoBehaviour:
   attackFailSafeNormalized: 0.98
   attackFailSafeTimeout: 1.25
   wanderToToggle: {fileID: 8399220390420330912}
+  autoTuneByCollider: 0
   forcePathAlways: 0
   debugDraw: 1
   debugLog: 1
   drawPathGrid: 1
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
+  externalControlActive: 0
+  pathIndex: 0
 --- !u!1001 &5558833241096022884
 PrefabInstance:
   m_ObjectHideFlags: 0

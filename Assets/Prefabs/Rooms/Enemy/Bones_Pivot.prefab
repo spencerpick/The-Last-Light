@@ -40,6 +40,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3661966625233564691}
     m_Modifications:
+    - target: {fileID: 2505196793469725714, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_Layer
+      value: 11
+      objectReference: {fileID: 0}
+    - target: {fileID: 4699038908964412846, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_Layer
+      value: 11
+      objectReference: {fileID: 0}
     - target: {fileID: 4850335948752006269, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
       propertyPath: m_LocalPosition.x
       value: -12.875
@@ -83,6 +91,14 @@ PrefabInstance:
     - target: {fileID: 6512577838794503420, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
       propertyPath: m_Name
       value: Bones
+      objectReference: {fileID: 0}
+    - target: {fileID: 7701494649558596831, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_Layer
+      value: 11
+      objectReference: {fileID: 0}
+    - target: {fileID: 8042241799178904114, guid: 35ad5789f4f67f045b4efc42526e96a1, type: 3}
+      propertyPath: m_Layer
+      value: 11
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

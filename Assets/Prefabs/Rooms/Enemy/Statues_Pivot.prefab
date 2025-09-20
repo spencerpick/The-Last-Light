@@ -18867,7 +18867,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5849764575388798731}
   - component: {fileID: 480113827021228166}
-  m_Layer: 0
+  m_Layer: 11
   m_Name: statue_2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22916,7 +22916,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5868499475077402626}
   - component: {fileID: 2480956830534382151}
-  m_Layer: 0
+  m_Layer: 11
   m_Name: statue
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23588,7 +23588,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5363249710867654721}
   - component: {fileID: 5257017885886895633}
-  m_Layer: 0
+  m_Layer: 11
   m_Name: statue_3
   m_TagString: Untagged
   m_Icon: {fileID: 0}

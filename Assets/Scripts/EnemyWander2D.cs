@@ -45,11 +45,19 @@ public class EnemyWander2D : MonoBehaviour
     public string paramX = "MoveX";
     public string paramY = "MoveY";
     public string paramSpeed = "Speed";
+    public string paramIsMoving = "IsMoving";
+    [Tooltip("Clamp animator speed to at least this when moving to avoid Idle gliding when velocities are tiny.")]
+    public float animWalkSpeedFloor = 0.1f;
+    [Tooltip("If true, drive Speed as 1 when moving and 0 when stopped (most robust for 2D BTs).")]
+    public bool useBinarySpeedParam = true;
+    [Tooltip("If false, we will set animator parameters without checking existence (useful if Animator.parameters is empty at runtime).")]
+    public bool strictAnimatorParams = false;
 
     // keep alternates as a safety net
     static readonly string[] AltX = { "MoveX", "DirX", "Horizontal" };
     static readonly string[] AltY = { "MoveY", "DirY", "Vertical" };
     static readonly string[] AltS = { "Speed", "speed" };
+    static readonly string[] AltM = { "IsMoving", "isMoving", "Moving", "moving" };
 
     // ─────────────────────── Debug / Gizmos
     [Header("Debug / Gizmos")]
@@ -65,6 +73,7 @@ public class EnemyWander2D : MonoBehaviour
     Collider2D boundRoom;
     Vector2 dir = Vector2.zero;
     Vector2 lastVisualDir = Vector2.right;
+    Vector2 lastVelocity = Vector2.zero;
     float segmentTimer = 0f;
 
     // animator param cache
@@ -148,6 +157,7 @@ public class EnemyWander2D : MonoBehaviour
     void FixedUpdate()
     {
         if (animator == null) { TryAutoWire(); RebuildAnimatorCache(); }
+        else if (!hasAnyAnimatorParams) { RebuildAnimatorCache(); }
 
         // Rebind if we drifted out
         if (rebindIfOutside && boundRoom != null)
@@ -207,10 +217,16 @@ public class EnemyWander2D : MonoBehaviour
 
         // Move
         Vector2 delta = dir * moveSpeed * Time.fixedDeltaTime;
-        if (rb) rb.velocity = delta / Time.fixedDeltaTime;
+        if (rb) rb.velocity = delta / Mathf.Max(Time.fixedDeltaTime, 1e-4f);
         else transform.position += (Vector3)delta;
 
-        ApplyVisuals(dir);
+        lastVelocity = rb ? rb.velocity : (delta / Mathf.Max(Time.fixedDeltaTime, 1e-4f));
+    }
+
+    void Update()
+    {
+        // Drive visuals from the latest velocity each frame (after physics step)
+        ApplyVisuals(lastVelocity);
     }
 
     void PickNewDirection()
@@ -301,22 +317,35 @@ public class EnemyWander2D : MonoBehaviour
     }
 
     // ─────────────────────── Visuals/Animator
-    void ApplyVisuals(Vector2 desiredDir)
+    void ApplyVisuals(Vector2 velocity)
     {
         if (animator == null) { TryAutoWire(); RebuildAnimatorCache(); }
 
-        Vector2 face = desiredDir.sqrMagnitude > 0.0001f ? desiredDir.normalized : lastVisualDir;
-        if (desiredDir.sqrMagnitude > 0.0001f) lastVisualDir = face;
+        // Use provided velocity primarily; fall back to previous
+        Vector2 vel = velocity;
+        if (vel.sqrMagnitude < 1e-6f && rb) vel = rb.velocity;
+        Vector2 move = vel;
+        Vector2 face = move.sqrMagnitude > 0.0001f
+            ? (Mathf.Abs(move.x) >= Mathf.Abs(move.y) ? new Vector2(Mathf.Sign(move.x), 0f)
+                                                      : new Vector2(0f, Mathf.Sign(move.y)))
+            : lastVisualDir;
+        if (move.sqrMagnitude > 0.0001f) lastVisualDir = face;
 
         if (animator && hasAnyAnimatorParams)
         {
             TrySetFloat(paramX, face.x);
             TrySetFloat(paramY, face.y);
-            TrySetFloat(paramSpeed, desiredDir.sqrMagnitude);
+            bool moving = vel.magnitude > 0.01f;
+            float speedParam = useBinarySpeedParam
+                ? (moving ? 1f : 0f)
+                : (moving ? Mathf.Max(animWalkSpeedFloor, vel.magnitude) : 0f);
+            TrySetFloat(paramSpeed, speedParam);
+            TrySetBool(paramIsMoving, moving);
 
             foreach (var n in AltX) TrySetFloat(n, face.x);
             foreach (var n in AltY) TrySetFloat(n, face.y);
-            foreach (var n in AltS) TrySetFloat(n, desiredDir.sqrMagnitude);
+            foreach (var n in AltS) TrySetFloat(n, vel.magnitude);
+            foreach (var n in AltM) TrySetBool(n, moving);
         }
 
         if (flipSpriteOnX && spriteRenderer)
@@ -324,7 +353,7 @@ public class EnemyWander2D : MonoBehaviour
             if (Mathf.Abs(face.x) > 0.01f) spriteRenderer.flipX = face.x < 0f;
         }
 
-        if (rotateTransformToDir && desiredDir.sqrMagnitude > 0.0001f)
+        if (rotateTransformToDir && move.sqrMagnitude > 0.0001f)
         {
             float targetAngle = Mathf.Atan2(face.y, face.x) * Mathf.Rad2Deg - 90f;
             float angle = Mathf.MoveTowardsAngle(transform.eulerAngles.z, targetAngle,
@@ -354,7 +383,13 @@ public class EnemyWander2D : MonoBehaviour
     void TrySetFloat(string name, float value)
     {
         if (string.IsNullOrEmpty(name) || animator == null) return;
-        if (animParams.Contains(name)) animator.SetFloat(name, value);
+        if (!strictAnimatorParams || animParams.Contains(name)) animator.SetFloat(name, value);
+    }
+
+    void TrySetBool(string name, bool value)
+    {
+        if (string.IsNullOrEmpty(name) || animator == null) return;
+        if (!strictAnimatorParams || animParams.Contains(name)) animator.SetBool(name, value);
     }
 
 #if UNITY_EDITOR
