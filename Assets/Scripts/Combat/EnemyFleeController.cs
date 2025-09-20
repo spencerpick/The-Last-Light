@@ -10,13 +10,13 @@ using UnityEngine;
 /// - Animator (we set IsRunning true while fleeing)
 ///
 /// Behavior:
-/// • When HP falls below threshold (or when TriggerFlee() is called), we:
+/// ï¿½ When HP falls below threshold (or when TriggerFlee() is called), we:
 ///   - Pick a far "safe" point = an Anchor_* transform (from your room prefabs) that is FAR from the player
 ///     and not near the current position.
 ///   - Spawn/position a hidden dummy Transform there and temporarily set chase.player = dummy.
 ///   - Boost speed, disable attack, force path usage, set IsRunning = true.
-/// • After a flee duration window, we restore the original target (real player), speed, and attack.
-/// • If no anchors found, fall back to steer-away mode with obstacle probes so it won’t get stuck.
+/// ï¿½ After a flee duration window, we restore the original target (real player), speed, and attack.
+/// ï¿½ If no anchors found, fall back to steer-away mode with obstacle probes so it wonï¿½t get stuck.
 /// </summary>
 [DisallowMultipleComponent]
 public class EnemyFleeController : MonoBehaviour
@@ -58,6 +58,38 @@ public class EnemyFleeController : MonoBehaviour
     [Tooltip("Force path usage during flee (helps commit to the flee route).")]
     public bool forcePathAlwaysDuringFlee = true;
 
+    [Header("Pathfinding During Flee")]
+    [Tooltip("Auto expand EnemyChaseAttack2D.pathWorldSize so the grid spans from serpent to anchor.")]
+    public bool autoExpandWorldSizeDuringFlee = true;
+    [Tooltip("Extra margin added around the start/goal bounds when expanding world size.")]
+    public float worldSizeMargin = 2f;
+    [Tooltip("Minimum world size while fleeing to avoid tiny grids.")]
+    public Vector2 minWorldSizeDuringFlee = new Vector2(8f, 8f);
+    [Tooltip("Temporarily enable chase.debugDraw while fleeing to mirror chase visuals.")]
+    public bool enableChaseDebugDrawDuringFlee = true;
+    [Tooltip("Also enable chase.debugLog while fleeing to see A* diagnostics.")]
+    public bool enableChaseDebugLogDuringFlee = true;
+    [Tooltip("Clamp the maximum world size when auto-expanding.")]
+    public Vector2 maxWorldSizeDuringFlee = new Vector2(64f, 64f);
+
+    [Header("Debug Visualization")]
+    [Tooltip("Show debug gizmos for fleeing path and target anchor.")]
+    public bool showDebugGizmos = true;
+    [Tooltip("Color for the fleeing path line (similar to chase pathfinding).")]
+    public Color fleePathColor = Color.cyan;
+    [Tooltip("Color for the target anchor marker.")]
+    public Color targetAnchorColor = Color.yellow;
+    [Tooltip("Size of the target anchor marker.")]
+    public float anchorMarkerSize = 0.3f;
+    [Tooltip("Show all available anchors as small markers.")]
+    public bool showAllAnchors = false;
+    [Tooltip("Color for all available anchors (smaller markers).")]
+    public Color allAnchorsColor = new Color(1f, 1f, 1f, 0.3f);
+
+    [Header("Debug Logging")]
+    [Tooltip("Log chosen anchor and path details to the Console while fleeing.")]
+    public bool logFleeDebug = true;
+
     // Internals
     Transform originalTarget;
     Transform dummyTarget;
@@ -66,6 +98,10 @@ public class EnemyFleeController : MonoBehaviour
     AttackData cachedAttackData;
     float cachedChaseSpeed;
     bool cachedForcePathAlways;
+    Vector2 cachedPathWorldSize;
+    bool cachedUseGridPathfinding;
+    bool cachedDebugDraw;
+    bool cachedDebugLog;
     int isRunningHash;
 
     void Awake()
@@ -102,6 +138,18 @@ public class EnemyFleeController : MonoBehaviour
         }
     }
 
+    void FixedUpdate()
+    {
+        // Draw fleeing path debug lines (same as EnemyChaseAttack2D does in FixedUpdate)
+        if (isFleeing && showDebugGizmos && chase != null && chase.path != null && chase.path.Count > 0)
+        {
+            for (int i = 0; i < chase.path.Count - 1; i++)
+            {
+                Debug.DrawLine(chase.path[i], chase.path[i + 1], fleePathColor, Time.fixedDeltaTime);
+            }
+        }
+    }
+
     /// <summary>Call this from anywhere (e.g., Health2D OnDamaged event) to force a flee now.</summary>
     public void TriggerFlee()
     {
@@ -118,6 +166,7 @@ public class EnemyFleeController : MonoBehaviour
         originalTarget = chase.player;
         cachedChaseSpeed = chase.chaseSpeed;
         cachedForcePathAlways = chase.forcePathAlways;
+        chase.externalControlActive = true;
         if (disableAttackDuringFlee)
         {
             cachedAttackData = chase.attack;
@@ -137,19 +186,74 @@ public class EnemyFleeController : MonoBehaviour
         {
             // Use A* by redirecting EnemyChaseAttack2D to a dummy target placed at the anchor
             dummyTarget.position = anchor.position;
+
+            // Cache + adjust pathfinding envelope so grid spans from current pos to anchor
+            cachedPathWorldSize = chase.pathWorldSize;
+            cachedUseGridPathfinding = chase.useGridPathfinding;
+            cachedDebugDraw = chase.debugDraw;
+            cachedDebugLog = chase.debugLog;
+            if (enableChaseDebugDrawDuringFlee) chase.debugDraw = true;
+            if (enableChaseDebugLogDuringFlee) chase.debugLog = true;
+            chase.useGridPathfinding = true;
+
+            if (autoExpandWorldSizeDuringFlee)
+            {
+                Vector2 start = transform.position;
+                Vector2 goal = dummyTarget.position;
+                float w = Mathf.Abs(goal.x - start.x) + worldSizeMargin * 2f;
+                float h = Mathf.Abs(goal.y - start.y) + worldSizeMargin * 2f;
+                w = Mathf.Clamp(w, minWorldSizeDuringFlee.x, maxWorldSizeDuringFlee.x);
+                h = Mathf.Clamp(h, minWorldSizeDuringFlee.y, maxWorldSizeDuringFlee.y);
+                chase.pathWorldSize = new Vector2(w, h);
+            }
+
             chase.player = dummyTarget;
 
+            if (logFleeDebug)
+            {
+                Debug.Log($"[FLEE:{name}] Anchor='{anchor.name}' pos={anchor.position}  dist={(Vector2.Distance(transform.position, anchor.position)).ToString("F2")}  pathWorldSize={chase.pathWorldSize}  cellSize={chase.pathCellSize}");
+            }
+
             // Let the chase script handle movement along its path for the duration
+            chase.ForceChaseCurrentTarget(clearExistingPath: true);
             float t = 0f;
+            int prevCount = -1;
+            int prevIndex = -1;
+            float nextLog = 0f;
             while (t < fleeSeconds)
             {
                 t += Time.deltaTime;
+                // Snapshot path periodically or when it changes
+                if (chase != null && chase.path != null)
+                {
+                    if (chase.path.Count != prevCount || chase.pathIndex != prevIndex || Time.time >= nextLog)
+                    {
+                        prevCount = chase.path.Count;
+                        prevIndex = chase.pathIndex;
+                        nextLog = Time.time + 0.75f;
+                        if (logFleeDebug)
+                        {
+                            var preview = "";
+                            int n = Mathf.Min(chase.path.Count, 6);
+                            for (int i = 0; i < n; i++)
+                            {
+                                preview += i == 0 ? $"{chase.path[i].ToString()}" : $" -> {chase.path[i].ToString()}";
+                            }
+                            Debug.Log($"[FLEE:{name}] pathCount={chase.path.Count} pathIndex={chase.pathIndex} useGrid={chase.useGridPathfinding} forcePathAlways={chase.forcePathAlways} debugDraw={chase.debugDraw} preview=[{preview}] ");
+                        }
+                        // trigger recalculation next frame in case we're still empty
+                        if (chase.path.Count == 0)
+                            chase.ForcePathRecalcNow();
+                    }
+                }
                 yield return null;
             }
         }
         else
         {
-            // No anchors found — fallback flee that avoids walls
+            // No anchors found â€“ fallback flee that avoids walls
+            if (logFleeDebug)
+                Debug.Log($"[FLEE:{name}] No anchors found. Using fallback flee.");
             float t = 0f;
             while (t < fleeSeconds)
             {
@@ -164,6 +268,12 @@ public class EnemyFleeController : MonoBehaviour
         chase.chaseSpeed = cachedChaseSpeed;
         if (disableAttackDuringFlee) chase.attack = cachedAttackData;
         if (forcePathAlwaysDuringFlee) chase.forcePathAlways = cachedForcePathAlways;
+        if (autoExpandWorldSizeDuringFlee) chase.pathWorldSize = cachedPathWorldSize;
+        chase.useGridPathfinding = cachedUseGridPathfinding;
+        if (enableChaseDebugDrawDuringFlee) chase.debugDraw = cachedDebugDraw;
+        if (enableChaseDebugLogDuringFlee) chase.debugLog = cachedDebugLog;
+        chase.externalControlActive = false;
+        if (enableChaseDebugLogDuringFlee) chase.debugLog = cachedDebugLog;
 
         // Animator: run OFF
         if (isRunningHash != 0) animator.SetBool(isRunningHash, false);
@@ -241,4 +351,79 @@ public class EnemyFleeController : MonoBehaviour
         float speed = Mathf.Max(0.1f, chase.chaseSpeed);
         rb.velocity = away * speed;
     }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (!showDebugGizmos) return;
+
+        // Draw all available anchors if enabled
+        if (showAllAnchors)
+        {
+            var allTransforms = FindObjectsOfType<Transform>();
+            Gizmos.color = allAnchorsColor;
+            foreach (var t in allTransforms)
+            {
+                if (t == null || !t.gameObject.activeInHierarchy) continue;
+                if (t.name.StartsWith(anchorNamePrefix))
+                {
+                    Gizmos.DrawWireSphere(t.position, anchorMarkerSize * 0.3f);
+                }
+            }
+        }
+
+        // Draw fleeing path and target anchor when fleeing
+        if (isFleeing && chase != null)
+        {
+            // Draw waypoint spheres (same size as EnemyChaseAttack2D)
+            if (chase.path != null && chase.path.Count > 0)
+            {
+                Gizmos.color = fleePathColor;
+                for (int i = 0; i < chase.path.Count; i++)
+                {
+                    Gizmos.DrawSphere(chase.path[i], 0.06f);
+                }
+                
+                // Draw current path index indicator
+                if (chase.pathIndex < chase.path.Count)
+                {
+                    Gizmos.color = Color.green;
+                    Gizmos.DrawSphere(chase.path[chase.pathIndex], 0.08f);
+                }
+            }
+
+            // Draw target anchor marker
+            if (dummyTarget != null)
+            {
+                Gizmos.color = targetAnchorColor;
+                Gizmos.DrawWireSphere(dummyTarget.position, anchorMarkerSize);
+                
+                // Draw a cross marker for extra visibility
+                float crossSize = anchorMarkerSize * 0.5f;
+                Vector3 pos = dummyTarget.position;
+                Gizmos.DrawLine(pos + Vector3.left * crossSize, pos + Vector3.right * crossSize);
+                Gizmos.DrawLine(pos + Vector3.up * crossSize, pos + Vector3.down * crossSize);
+            }
+            
+            // Debug info: show current target
+            if (chase.player != null)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawWireSphere(chase.player.position, 0.2f);
+            }
+        }
+    }
+
+    void OnDrawGizmos()
+    {
+        if (!showDebugGizmos) return;
+
+        // Always show current flee status
+        if (isFleeing)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(transform.position, 0.5f);
+        }
+    }
+#endif
 }

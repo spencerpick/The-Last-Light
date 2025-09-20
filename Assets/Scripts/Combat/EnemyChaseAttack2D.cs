@@ -1,5 +1,8 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+// Force Unity types over System.Numerics
+using Vector2 = UnityEngine.Vector2;
+using Vector3 = UnityEngine.Vector3;
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Animator))]
@@ -94,6 +97,10 @@ public class EnemyChaseAttack2D : MonoBehaviour
     public bool drawPathGrid = true;
     public Color gridColor = new Color(0f, 1f, 1f, 0.06f);
 
+    [Header("External Control (AI overrides)")]
+    [Tooltip("When true, external logic (e.g., flee) owns the movement. Prevents auto-switch to Wander by loseRadius.")]
+    public bool externalControlActive = false;
+
     // ───────── Internals
     Animator animator;
     Rigidbody2D rb;
@@ -113,8 +120,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
     float lastFaceChangeTime = -999f;
 
     // Path
-    readonly List<Vector2> path = new List<Vector2>(64);
-    int pathIndex = 0;
+    public readonly List<Vector2> path = new List<Vector2>(64);
+    public int pathIndex = 0;
     float nextPathTime = 0f;
     Vector3 lastPlayerPos;
     float waypointStuckTimer = 0f;
@@ -180,6 +187,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
         switch (state)
         {
             case State.Wander:
+                if (externalControlActive)
+                {
+                    SetState(State.Chase);
+                    DriveAnim(false, lastFace, 0f);
+                    break;
+                }
                 if (dist <= detectionRadius && staggerTimer <= 0f)
                     SetState(State.Chase);
                 DriveAnim(false, lastFace, 0f);
@@ -192,7 +205,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
             case State.Chase:
                 {
-                    if (dist > loseRadius) { ClearPath(); SetState(State.Wander); break; }
+                    if (!externalControlActive && dist > loseRadius) { ClearPath(); SetState(State.Wander); break; }
                     if (staggerTimer > 0f) { ClearPath(); SetState(State.Stunned); break; }
 
                     Vector2 moveDir = Vector2.zero;
@@ -207,13 +220,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
                             usingPath = true;
                             Vector2 target = path[pathIndex];
 
-                            // Optional: if next node is roughly aligned and unobstructed, skip current node
+                            // Optional: skip to next node if direct line is clear and it's meaningfully shorter
                             if (pathIndex + 1 < path.Count)
                             {
                                 Vector2 nextNode = path[pathIndex + 1];
                                 if (IsLineClear((Vector2)transform.position, nextNode))
                                 {
-                                    // only skip if it shortens path meaningfully
                                     float dCur = Vector2.Distance(transform.position, target);
                                     float dNext = Vector2.Distance(transform.position, nextNode);
                                     if (dNext + pathCellSize * 0.25f <= dCur)
@@ -240,7 +252,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 lastWaypointDist = 999f;
                             }
 
-                            // Steer to closest point on current segment to stay in free space
+                            // Steer to closest point on segment to reduce wall friction
                             if (steerToSegment && pathIndex > 0)
                             {
                                 Vector2 a = path[pathIndex - 1];
@@ -248,14 +260,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 Vector2 cp = ClosestPointOnSegment(a, b, (Vector2)transform.position);
                                 Vector2 toCp = cp - (Vector2)transform.position;
                                 if (toCp.sqrMagnitude > (pathCellSize * 0.15f) * (pathCellSize * 0.15f))
-                                {
                                     delta = toCp;
-                                }
                             }
 
                             moveDir = delta.sqrMagnitude > 1e-6f ? delta.normalized : Vector2.zero;
 
-                            // Prefer moving along the segment direction (reduces oscillation near corners)
+                            // Prefer segment direction; micro-avoid when blocked
                             if (pathIndex > 0)
                             {
                                 Vector2 a = path[pathIndex - 1];
@@ -264,7 +274,6 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 if (seg.sqrMagnitude > 1e-6f)
                                 {
                                     Vector2 segDir = seg.normalized;
-                                    // If heading roughly toward the segment but blocked, try small lateral offsets along corridor
                                     if (IsBlocked(segDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var blk))
                                     {
                                         Vector2 perp = new Vector2(-segDir.y, segDir.x);
@@ -280,10 +289,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                     }
                                     else
                                     {
-                                        // If not blocked and we're close to the wall, bias slightly sideways to create clearance
                                         if (pathLateralOffset > 0f)
                                         {
-                                            // sample which side has more free space
                                             Vector2 perp = new Vector2(-segDir.y, segDir.x);
                                             float lFree = EstimateFreeAlong(perp, pathSteerProbeDistance);
                                             float rFree = EstimateFreeAlong(-perp, pathSteerProbeDistance);
@@ -299,7 +306,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 }
                             }
 
-                            // Waypoint progress watchdog: if we fail to reduce distance for a short time, try advancing
+                            // Watchdog if not progressing toward node
                             if (pathIndex < path.Count)
                             {
                                 if (curDist < lastWaypointDist - 0.01f) { waypointStuckTimer = 0f; lastWaypointDist = curDist; }
@@ -311,18 +318,16 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                     if (IsLineClear((Vector2)transform.position, nextNode))
                                     {
                                         pathIndex++;
-                                        target = path[pathIndex];
-                                        delta = target - (Vector2)transform.position;
-                                        curDist = delta.magnitude;
+                                        var t2 = path[pathIndex];
+                                        var d2 = t2 - (Vector2)transform.position;
+                                        curDist = d2.magnitude;
                                         waypointStuckTimer = 0f;
                                         lastWaypointDist = curDist + 1f;
                                     }
                                     else
                                     {
-                                        // Try corner nudge first, then full stuck escape if that fails
                                         Vector2 a = path[Mathf.Max(0, pathIndex - 1)];
-                                        Vector2 b = target;
-                                        Vector2 seg = (b - a);
+                                        Vector2 seg = (target - a);
                                         Vector2 segDir = seg.sqrMagnitude > 1e-6f ? seg.normalized : (delta.sqrMagnitude > 0f ? delta.normalized : Vector2.right);
                                         Vector2 nudge = ChooseCornerNudge(segDir, Mathf.Max(cornerProbeDistance, pathCellSize * 0.8f));
                                         if (nudge.sqrMagnitude > 0f)
@@ -343,6 +348,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 }
                             }
 
+                            // Commit any temporary nudges/escapes
                             if (cornerNudgeTimer > 0f && cornerNudgeDir.sqrMagnitude > 0f)
                             {
                                 cornerNudgeTimer -= Time.fixedDeltaTime;
@@ -354,7 +360,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
                                 moveDir = stuckEscapeDir;
                             }
 
-                            // Micro-avoidance while following path: if immediate move is blocked, slide along obstacle
+                            // Micro-avoid along walls
                             if (moveDir.sqrMagnitude > 0f && IsBlocked(moveDir, Mathf.Max(pathSteerProbeDistance, pathCellSize * 0.6f), out var wpHit))
                             {
                                 var slide = ChooseSlide(moveDir, wpHit);
@@ -368,7 +374,6 @@ public class EnemyChaseAttack2D : MonoBehaviour
                             }
                             else
                             {
-                                // path in use ⇒ no slide fallback
                                 committedSlide = Vector2.zero;
                                 slideTimer = 0f;
                             }
@@ -431,8 +436,18 @@ public class EnemyChaseAttack2D : MonoBehaviour
                     DriveAnim(rb.velocity.sqrMagnitude > 0.0001f, lastFace, actualSpeed);
 
                     bool canAttack = retreatTimer <= 0f && staggerTimer <= 0f && Time.time >= nextReadyTime;
-                    if (canAttack && dist <= attackRange)
-                        StartAttack(lastFace);
+
+                    if (canAttack)
+                    {
+                        // Face the player NOW and use the actual attack hitbox to test reach
+                        Vector2 faceToPlayer = player ? (Vector2)(player.position - transform.position) : lastFace;
+                        Vector2 faceDir = Snap4(faceToPlayer);
+
+                        if (IsPlayerInAttackReach(faceDir) || Vector2.Distance(transform.position, player.position) <= attackRange)
+                        {
+                            StartAttack(faceDir);
+                        }
+                    }
 
                     if (debugDraw)
                     {
@@ -458,6 +473,25 @@ public class EnemyChaseAttack2D : MonoBehaviour
                 if (clipEnded || timedOut) ForceEndAttack();
                 break;
         }
+    }
+
+    // Use the real attack box to see if the player is within reach in a given facing.
+    bool IsPlayerInAttackReach(Vector2 faceDir)
+    {
+        if (!attack || !player) return false;
+
+        Vector2 dir = faceDir.sqrMagnitude > EPS ? faceDir.normalized : Vector2.right;
+        Vector2 center = (Vector2)pivot.position + dir * attack.forwardOffset;
+
+        int count = Physics2D.OverlapBoxNonAlloc(center, attack.boxSize, 0f, hitBuf, hittableLayers);
+        for (int i = 0; i < count; i++)
+        {
+            var c = hitBuf[i];
+            if (!c) continue;
+            if (player && (c.transform == player || c.attachedRigidbody && c.attachedRigidbody.transform == player))
+                return true;
+        }
+        return false;
     }
 
     // ───────── Path helpers
@@ -586,7 +620,7 @@ public class EnemyChaseAttack2D : MonoBehaviour
         DriveAnim(false, lastFace, 0f);
         if (!string.IsNullOrEmpty(attackTrigger)) animator.SetTrigger(attackTrigger);
 
-        if (debugLog) Debug.Log($"[{name}] ATTACK start");
+        if (debugLog) Debug.Log($"[{name}] ATTACK start (face={lastFace})");
     }
 
     public void AnimationHitWindow()
@@ -632,6 +666,22 @@ public class EnemyChaseAttack2D : MonoBehaviour
             prevPos = transform.position;
         }
     }
+
+	// ───────── External control helpers (used by flee controller)
+	public void ForceChaseCurrentTarget(bool clearExistingPath = true)
+	{
+		if (clearExistingPath) ClearPath();
+		SetState(State.Chase);
+		// ensure a recompute next tick
+		nextPathTime = 0f;
+		if (player) lastPlayerPos = player.position + new Vector3(0.001f, 0f, 0f);
+	}
+
+	public void ForcePathRecalcNow()
+	{
+		nextPathTime = 0f;
+		if (player) lastPlayerPos = player.position + new Vector3(0.001f, 0f, 0f);
+	}
 
     void OnDamagedStagger()
     {
@@ -701,7 +751,6 @@ public class EnemyChaseAttack2D : MonoBehaviour
         Vector2 perp = new Vector2(-along.y, along.x);
         float leftFree = EstimateFreeAlong(perp, probe);
         float rightFree = EstimateFreeAlong(-perp, probe);
-        // Prefer the freer side; if both tiny, return zero and let slide handle it
         if (leftFree < 0.05f && rightFree < 0.05f) return Vector2.zero;
         Vector2 chosen = (leftFree >= rightFree ? perp : -perp);
         return chosen.normalized;
@@ -715,30 +764,28 @@ public class EnemyChaseAttack2D : MonoBehaviour
             new Vector2(1, 1).normalized, new Vector2(1, -1).normalized,
             new Vector2(-1, 1).normalized, new Vector2(-1, -1).normalized
         };
-        
+
         float bestScore = -1f;
         Vector2 bestDir = Vector2.zero;
-        
+
         foreach (var dir in dirs)
         {
             float free = EstimateFreeAlong(dir, probe);
-            if (free < 0.1f) continue; // Skip blocked directions
-            
-            // Score: how much closer does this direction get us to target?
+            if (free < 0.1f) continue;
+
             Vector2 testPos = current + dir * Mathf.Min(free, probe * 0.5f);
             float distToTarget = Vector2.Distance(testPos, target);
             float currentDist = Vector2.Distance(current, target);
             float improvement = currentDist - distToTarget;
-            
-            // Prefer directions that get us closer to target
-            float score = improvement + free * 0.1f; // Bonus for more free space
+
+            float score = improvement + free * 0.1f;
             if (score > bestScore)
             {
                 bestScore = score;
                 bestDir = dir;
             }
         }
-        
+
         return bestDir;
     }
 

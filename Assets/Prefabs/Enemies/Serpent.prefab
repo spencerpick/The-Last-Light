@@ -18,7 +18,7 @@ GameObject:
   - component: {fileID: 6186217488947378460}
   - component: {fileID: 470245267461475595}
   - component: {fileID: 4836909696162400784}
-  - component: {fileID: 3005302375516975594}
+  - component: {fileID: 4802882290720203209}
   m_Layer: 10
   m_Name: Serpent
   m_TagString: Untagged
@@ -340,6 +340,8 @@ MonoBehaviour:
   debugLog: 0
   drawPathGrid: 1
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
+  externalControlActive: 0
+  pathIndex: 0
 --- !u!114 &4836909696162400784
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -347,7 +349,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313446561066280317}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dab1d03e430189341bcf4f51268d43a5, type: 3}
   m_Name: 
@@ -357,7 +359,7 @@ MonoBehaviour:
   animator: {fileID: 0}
   lowHealthFraction: 0.35
   canFleeMultipleTimes: 0
-  fleeDurationRange: {x: 2.8, y: 4}
+  fleeDurationRange: {x: 30, y: 30}
   runSpeedMultiplier: 1.5
   isRunningParam: IsRunning
   minAnchorDistanceFromSelf: 4
@@ -365,11 +367,24 @@ MonoBehaviour:
   anchorNamePrefix: Anchor_
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 128
   steerProbeDistance: 0.7
   disableAttackDuringFlee: 1
   forcePathAlwaysDuringFlee: 1
---- !u!114 &3005302375516975594
+  autoExpandWorldSizeDuringFlee: 1
+  worldSizeMargin: 12
+  minWorldSizeDuringFlee: {x: 16, y: 12}
+  enableChaseDebugDrawDuringFlee: 1
+  enableChaseDebugLogDuringFlee: 1
+  maxWorldSizeDuringFlee: {x: 64, y: 64}
+  showDebugGizmos: 1
+  fleePathColor: {r: 0, g: 1, b: 1, a: 1}
+  targetAnchorColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  anchorMarkerSize: 0.5
+  showAllAnchors: 0
+  allAnchorsColor: {r: 1, g: 1, b: 1, a: 0.3}
+  logFleeDebug: 1
+--- !u!114 &4802882290720203209
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -378,6 +393,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 1313446561066280317}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c524fd97ebc138449ab03087e2f864a, type: 3}
+  m_Script: {fileID: 11500000, guid: 89d61f115c2a42f4c889a380a5566ccd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  enemy: {fileID: 0}
+  animator: {fileID: 0}
+  attackStateName: AttackBT
+  animatorLayerIndex: 0
+  hitWindowStart: 0.35
+  hitWindowEnd: 0.55
+  endAtNormalized: 0.98
