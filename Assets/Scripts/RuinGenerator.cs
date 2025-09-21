@@ -40,6 +40,14 @@ public class RuinGenerator : MonoBehaviour
     [Header("Scene References")]
     public Transform ruinContainer;
     public GameObject playerPrefab;
+    public GameObject endRoomPrefab;           // optional: full room prefab (legacy). Prefer heartfirePrefab
+    public GameObject heartfirePrefab;         // recommended: interactable to place inside farthest room
+    [Header("End Room Type (PCG)")]
+    [Tooltip("Room type/tag used by your End room prefab in Room Type Definitions (e.g., 'Heartfire').")] 
+    public string endRoomType = "Heartfire";
+    
+    // runtime
+    GameObject startRoomInstance;
 
     [Header("Room Type Settings")]
     public List<RoomTypeDefinition> roomTypeDefinitions;
@@ -157,6 +165,7 @@ public class RuinGenerator : MonoBehaviour
         placedRooms.Add(startRoom);
         roomToGridOrigin[startRoom] = startGridOrigin;
         MarkOccupiedCells(startGridOrigin, startProfile.size, startRoom);
+        startRoomInstance = startRoom;
 
         Transform playerSpawn = null;
         foreach (Transform t in startRoom.GetComponentsInChildren<Transform>(true))
@@ -260,6 +269,171 @@ public class RuinGenerator : MonoBehaviour
         AddExtraConnections();
         Debug.Log($"Placed {placedCount} rooms (attempts: {safetyCounter})");
         Debug.Log("Final room type counts: " + string.Join(", ", placedTypeCounts.Select(kv => $"{kv.Key}:{kv.Value}")));
+
+        // If the End room is a full-fledged room type in your RoomTypeDefinitions,
+        // place it now at the farthest valid anchor so it corridor-connects like other rooms.
+        TryPlaceEndRoomFarthest(endRoomType);
+        // (Optional) legacy fallback: drop a heartfire prop instead if configured
+        if (placedTypeCounts.ContainsKey(endRoomType) && placedTypeCounts[endRoomType] == 0)
+            TrySpawnEndRoomFarthestFromStart();
+    }
+
+    // Place a specific room type (e.g., "Heartfire") at the farthest valid anchor from the start room,
+    // fully connected via a corridor like normal rooms. Returns true if placed.
+    bool TryPlaceEndRoomFarthest(string tryType)
+    {
+        if (string.IsNullOrEmpty(tryType)) return false;
+        // Ensure we still can place one (respect maxCount tracked in placedTypeCounts if present)
+        if (placedTypeCounts.ContainsKey(tryType))
+        {
+            var def = roomTypeDefinitions.FirstOrDefault(d => d.type == tryType);
+            if (def.maxCount != -1 && placedTypeCounts[tryType] >= def.maxCount) return false;
+        }
+
+        // Start and world unit
+        GameObject start = startRoomInstance ? startRoomInstance : (placedRooms.Count > 0 ? placedRooms[0] : null);
+        if (!start) return false;
+        Vector3 startPos = start.transform.position;
+
+        // Scan all placed rooms and all 4 anchors to find the farthest valid placement
+        GameObject bestBase = null; Vector2Int bestDir = Vector2Int.zero; GameObject bestPrefab = null;
+        Vector2Int bestNewOrigin = Vector2Int.zero; float bestDist = -1f; Transform bestFromAnchor = null; Transform bestToAnchor = null; float bestUnit = 1f;
+
+        foreach (GameObject baseRoom in placedRooms)
+        {
+            if (!baseRoom) continue;
+            string fromType = baseRoom.tag;
+            // early prune by forbidden adjacency
+            if (IsForbiddenAdjacent(fromType, tryType)) continue;
+
+            foreach (var dir in directions)
+            {
+                var prefab = GetRandomRoomPrefabForType(tryType);
+                if (!prefab) continue;
+                var temp = Instantiate(prefab);
+                var tempProfile = temp.GetComponentInChildren<RoomProfile>();
+                if (!tempProfile) { Destroy(temp); continue; }
+
+                Transform currentRoomExitAnchor = FindAnchor(baseRoom, DirectionToAnchorName(dir));
+                Transform newRoomEntryAnchor = FindAnchor(temp, DirectionToAnchorName(-dir));
+                if (currentRoomExitAnchor == null || newRoomEntryAnchor == null) { Destroy(temp); continue; }
+
+                temp.transform.position = Vector3.zero;
+                float unit = tempProfile.gridUnitSize;
+                Vector3 desiredEntryWorld = currentRoomExitAnchor.position + (Vector3)(Vector2)dir * unit * minCorridorLength;
+                Vector3 proposedWorldPos = desiredEntryWorld - newRoomEntryAnchor.position;
+                Vector2Int proposedOrigin = GridOriginFromWorldPos(proposedWorldPos, unit);
+
+                // validate grid occupancy
+                if (!CanPlaceRoom(proposedOrigin, tempProfile.size)) { Destroy(temp); continue; }
+                if (IsForbiddenAdjacent(fromType, tryType)) { Destroy(temp); continue; }
+
+                // distance metric: room center distance from start
+                Vector3 center = proposedWorldPos + new Vector3(tempProfile.size.x * unit * 0.5f, tempProfile.size.y * unit * 0.5f, 0f);
+                float d = Vector2.Distance(startPos, center);
+                if (d > bestDist)
+                {
+                    bestDist = d;
+                    bestBase = baseRoom; bestDir = dir; bestPrefab = prefab; bestNewOrigin = proposedOrigin; bestUnit = unit;
+                    bestFromAnchor = currentRoomExitAnchor; bestToAnchor = FindAnchor(temp, DirectionToAnchorName(-dir));
+                }
+
+                Destroy(temp);
+            }
+        }
+
+        if (!bestBase || !bestPrefab) return false;
+
+        // Finalize placement
+        var newRoom = Instantiate(bestPrefab, ruinContainer);
+        var newProf = newRoom.GetComponentInChildren<RoomProfile>();
+        Vector3 newWorldPos = WorldPosFromGridOrigin(bestNewOrigin, newProf ? newProf.gridUnitSize : bestUnit);
+        // Align exact anchor as earlier calculation
+        if (bestFromAnchor != null)
+        {
+            Transform entry = FindAnchor(newRoom, DirectionToAnchorName(-bestDir));
+            if (entry) newWorldPos = (bestFromAnchor.position + (Vector3)(Vector2)bestDir * bestUnit * minCorridorLength) - entry.position;
+        }
+        newRoom.transform.position = newWorldPos;
+
+        placedRooms.Add(newRoom);
+        roomToGridOrigin[newRoom] = bestNewOrigin;
+        MarkOccupiedCells(bestNewOrigin, newProf ? newProf.size : new Vector2Int(6, 6), newRoom);
+
+        // connect corridor and disable doors
+        CreateCorridorBetweenAnchors(FindAnchor(bestBase, DirectionToAnchorName(bestDir)), FindAnchor(newRoom, DirectionToAnchorName(-bestDir)), bestDir, bestUnit);
+        DisableDoorAtAnchor(bestBase, DirectionToDoorName(bestDir));
+        DisableDoorAtAnchor(newRoom, DirectionToDoorName(-bestDir));
+
+        connectedPairs.Add((roomToGridOrigin[bestBase], bestNewOrigin));
+        connectedPairs.Add((bestNewOrigin, roomToGridOrigin[bestBase]));
+
+        if (!placedTypeCounts.ContainsKey(tryType)) placedTypeCounts[tryType] = 0;
+        placedTypeCounts[tryType] += 1;
+        Debug.Log($"[PCG] Placed end room type '{tryType}' at farthest valid anchor (distance {bestDist:F1}).");
+        return true;
+    }
+
+    void TrySpawnEndRoomFarthestFromStart()
+    {
+        if (!heartfirePrefab && !endRoomPrefab) return;
+        if (placedRooms.Count == 0) return;
+
+        // Use the actual start room we instantiated
+        GameObject start = startRoomInstance ? startRoomInstance : (placedRooms.Count > 0 ? placedRooms[0] : null);
+        if (!start) return;
+        Vector3 startPos = start.transform.position;
+
+        // Find farthest existing room (grid origin distance)
+        GameObject farthest = null;
+        float best = -1f;
+        foreach (var room in placedRooms)
+        {
+            if (!room) continue;
+            float d = Vector2.Distance(startPos, room.transform.position);
+            if (d > best)
+            {
+                best = d;
+                farthest = room;
+            }
+        }
+        if (!farthest) return;
+
+        // Preferred: place heartfire inside the farthest room (no overlap, no corridor edits required)
+        if (heartfirePrefab)
+        {
+            // Try a pivot first
+            Transform pivot = null;
+            foreach (var t in farthest.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "Heartfire_Pivot") { pivot = t; break; }
+            }
+
+            Vector3 spawnPos;
+            if (pivot)
+                spawnPos = pivot.position;
+            else
+            {
+                // compute approximate room center
+                var prof = farthest.GetComponentInChildren<RoomProfile>();
+                Vector2Int origin = roomToGridOrigin.TryGetValue(farthest, out var og) ? og : Vector2Int.zero;
+                float unit = prof ? prof.gridUnitSize : 1f;
+                Vector2Int size = prof ? prof.size : new Vector2Int(6, 6);
+                Vector3 originWorld = WorldPosFromGridOrigin(origin, unit);
+                spawnPos = originWorld + new Vector3(size.x * unit * 0.5f, size.y * unit * 0.5f, 0f);
+            }
+
+            var heart = Instantiate(heartfirePrefab, ruinContainer);
+            heart.transform.position = spawnPos;
+            Debug.Log($"[PCG] Heartfire placed in farthest room (distance {best:F1}).");
+        }
+        else
+        {
+            // Legacy: overlay a whole end-room prefab at farthest position (may overlap visuals)
+            var endRoom = Instantiate(endRoomPrefab, ruinContainer);
+            endRoom.transform.position = farthest.transform.position;
+            Debug.Log($"[PCG] End room spawned at farthest room from start: {best:F1} units");
+        }
     }
 
     // Try to place a room of one of the provided types. Types are treated as a priority list;

@@ -337,6 +337,7 @@ GameObject:
   m_Component:
   - component: {fileID: 178249548}
   - component: {fileID: 178249549}
+  - component: {fileID: 178249550}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -371,6 +372,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ca8143df02f4c114db24b1ea17321bf0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &178249550
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 178249547}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38a4891f919dd86499dfb7cf157ed125, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tracks: []
+  shuffle: 1
+  loopPlaylist: 1
+  playOnStart: 1
+  volume: 0.6
+  crossfadeSeconds: 0
+  audioSource: {fileID: 0}
 --- !u!1 &276941682
 GameObject:
   m_ObjectHideFlags: 0
@@ -408,9 +428,10 @@ MonoBehaviour:
   - {fileID: 2169946472711469192, guid: 5d890a910fb571f4f954e0112cb3a7ee, type: 3}
   - {fileID: 2005786491922100873, guid: 833ffdbe905d6b643ae95aa3085486ac, type: 3}
   - {fileID: 8978569023216359519, guid: c4031f9b7a53da94c9491f46aa291f20, type: 3}
+  - {fileID: 8978569023216359519, guid: bfb87253a571e2048a4ba5363dc776ce, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
-  totalRooms: 10
+  totalRooms: 11
   extraConnections: 0
   maxJunctions: 0
   minCorridorLength: 6
@@ -418,6 +439,9 @@ MonoBehaviour:
   actualSeedUsed: 0
   ruinContainer: {fileID: 861627781}
   playerPrefab: {fileID: 2210471384161370293, guid: a2526657ad80f8745b95db75a70b32f4, type: 3}
+  endRoomPrefab: {fileID: 0}
+  heartfirePrefab: {fileID: 0}
+  endRoomType: Heartfire
   roomTypeDefinitions:
   - type: Tomb
     minCount: 2
@@ -440,6 +464,10 @@ MonoBehaviour:
     maxCount: 2
     weight: 2
   - type: Statues
+    minCount: 1
+    maxCount: 1
+    weight: 0
+  - type: Heartfire
     minCount: 1
     maxCount: 1
     weight: 0
@@ -563,9 +591,9 @@ Camera:
   m_NormalizedViewPortRect:
     serializedVersion: 2
     x: 0
-    y: 0.09493671
-    width: 0.569395
-    height: 0.56962025
+    y: 0
+    width: 1
+    height: 1
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34

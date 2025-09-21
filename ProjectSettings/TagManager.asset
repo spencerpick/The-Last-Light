@@ -13,6 +13,8 @@ TagManager:
   - Library
   - Statues
   - RoomBounds
+  - Zombie
+  - Heartfire
   layers:
   - Default
   - TransparentFX

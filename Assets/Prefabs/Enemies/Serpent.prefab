@@ -271,6 +271,9 @@ MonoBehaviour:
   paramY: MoveY
   paramSpeed: Speed
   paramIsMoving: IsMoving
+  animWalkSpeedFloor: 0.1
+  useBinarySpeedParam: 1
+  strictAnimatorParams: 0
   showRoomGizmo: 0
   showDirectionGizmo: 1
   roomGizmoColor: {r: 0, g: 1, b: 0, a: 0.15}
@@ -298,6 +301,11 @@ MonoBehaviour:
   faceChangeCooldown: 0.15
   faceAxisHysteresis: 0.2
   forceFaceToMovementOnWanderAndFlee: 1
+  animWalkSpeedFloor: 0.1
+  useBinarySpeedParam: 1
+  strictAnimatorParams: 0
+  zombieTag: 
+  zombieBlindSeconds: 5
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -345,6 +353,7 @@ MonoBehaviour:
   drawPathGrid: 1
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
   externalControlActive: 0
+  driveAnimatorInWander: 0
   pathIndex: 0
 --- !u!114 &4836909696162400784
 MonoBehaviour:

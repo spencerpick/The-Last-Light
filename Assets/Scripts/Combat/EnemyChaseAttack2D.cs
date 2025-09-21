@@ -36,6 +36,9 @@ public class EnemyChaseAttack2D : MonoBehaviour
     public bool useBinarySpeedParam = true;
     [Tooltip("If false, we will set animator parameters without checking existence (useful if Animator.parameters is empty at runtime).")]
     public bool strictAnimatorParams = false;
+    [Header("Enemy Tags / Effects")]
+    [Tooltip("If this GameObject is tagged with this tag (e.g., 'Zombie'), apply the blindness effect to the player on hit.")]
+    public string zombieTag = "Zombie";
 
     // ───────────────────────── PATHFINDING ─────────────────────────
     [Header("Pathfinding (runtime A*)")]
@@ -801,12 +804,16 @@ public class EnemyChaseAttack2D : MonoBehaviour
             if (hitThisSwing.Contains(id)) continue;
             hitThisSwing.Add(id);
 
-            var dmg = c.GetComponentInParent<IDamageable>();
+			var dmg = c.GetComponentInParent<IDamageable>();
             if (dmg == null) continue;
 
             Vector2 kb = dir * attack.knockbackForce;
-            var info = new HitInfo(attack.damage, kb, c.ClosestPoint(center), gameObject, attack);
-            dmg.ReceiveHit(in info);
+			var info = new HitInfo(attack.damage, kb, c.ClosestPoint(center), gameObject, attack);
+			dmg.ReceiveHit(in info);
+
+			// Optional enemy-specific on-hit effects (e.g., zombie blindness)
+			var targetRoot = c.attachedRigidbody ? c.attachedRigidbody.transform : c.transform;
+			ApplyOnHitEffects(targetRoot);
         }
 
         if (debugLog) Debug.Log($"[{name}] HIT WINDOW hits={hitThisSwing.Count}");
@@ -956,6 +963,22 @@ public class EnemyChaseAttack2D : MonoBehaviour
         float t = Vector2.Dot(p - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude);
         t = Mathf.Clamp01(t);
         return a + ab * t;
+    }
+
+    // ───────── On-hit effect hooks
+    void ApplyOnHitEffects(Transform hitTargetRoot)
+    {
+        if (string.Equals(gameObject.tag, zombieTag, System.StringComparison.OrdinalIgnoreCase))
+        {
+            var vision = hitTargetRoot.GetComponentInParent<PlayerVisionController>();
+            if (!vision)
+            {
+                // Try to locate on player object
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo) vision = playerGo.GetComponent<PlayerVisionController>();
+            }
+            if (vision) vision.BlindForSeconds(Mathf.Max(0.1f, vision.defaultBlindSeconds));
+        }
     }
 
 #if UNITY_EDITOR

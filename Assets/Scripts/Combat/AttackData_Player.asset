@@ -17,5 +17,5 @@ MonoBehaviour:
   cooldown: 0.25
   boxSize: {x: 1.1, y: 0.8}
   forwardOffset: 0.55
-  swingSfx: {fileID: 0}
+  swingSfx: {fileID: 8300000, guid: 49e6349d9acdace4ba5fc45ddddeba0e, type: 3}
   hitSfx: {fileID: 0}
