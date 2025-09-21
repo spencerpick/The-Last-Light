@@ -20,8 +20,8 @@ public class EmberShardPickup : MonoBehaviour
     [Range(0f,1f)] public float pickupVolume = 0.9f;
     public bool useHoverBob = true;
 
-    Vector3 basePos;
-    Vector3 lastDesired;
+    Vector3 baseLocalPos;
+    Vector3 lastDesiredLocal;
     bool playerInRange;
 
     void Awake()
@@ -35,7 +35,7 @@ public class EmberShardPickup : MonoBehaviour
             glowLight.color = glowColor;
             glowLight.intensity = Mathf.Max(0.6f, glowLight.intensity);
         }
-        basePos = transform.position;
+        baseLocalPos = transform.localPosition;
     }
 
     void Update()
@@ -46,17 +46,17 @@ public class EmberShardPickup : MonoBehaviour
         if (hoverBobAmplitude > 0f && hoverBobSpeed > 0f)
         {
             float y = Mathf.Sin(Time.time * hoverBobSpeed) * hoverBobAmplitude;
-            Vector3 desired = basePos + new Vector3(0f, y, 0f);
+            Vector3 desiredLocal = baseLocalPos + new Vector3(0f, y, 0f);
 
-            // If user moved it in play mode, adopt new base position instead of snapping back
-            if ((transform.position - lastDesired).sqrMagnitude > 0.000001f && lastDesired != Vector3.zero)
+            // If user moved it in play mode, adopt new base local position instead of snapping back
+            if ((transform.localPosition - lastDesiredLocal).sqrMagnitude > 0.000001f && lastDesiredLocal != Vector3.zero)
             {
-                basePos = transform.position - new Vector3(0f, y, 0f);
-                desired = basePos + new Vector3(0f, y, 0f);
+                baseLocalPos = transform.localPosition - new Vector3(0f, y, 0f);
+                desiredLocal = baseLocalPos + new Vector3(0f, y, 0f);
             }
 
-            transform.position = desired;
-            lastDesired = desired;
+            transform.localPosition = desiredLocal;
+            lastDesiredLocal = desiredLocal;
         }
     }
 

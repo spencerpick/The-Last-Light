@@ -15,6 +15,7 @@ TagManager:
   - RoomBounds
   - Zombie
   - Heartfire
+  - Start
   layers:
   - Default
   - TransparentFX

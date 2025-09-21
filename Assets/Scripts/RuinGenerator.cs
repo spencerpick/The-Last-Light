@@ -46,6 +46,11 @@ public class RuinGenerator : MonoBehaviour
     [Tooltip("Room type/tag used by your End room prefab in Room Type Definitions (e.g., 'Heartfire').")] 
     public string endRoomType = "Heartfire";
     
+    [Header("Loot Injection (optional)")]
+    [Tooltip("If enabled, after a Treasure-tagged room is instantiated, ensure there's at least one ember shard inside. If a pivot named 'Treasure_Shard_Pivot' or 'Embershard' exists, it will be used; otherwise the room center is used.")]
+    public bool ensureTreasureHasShard = true;
+    public GameObject defaultShardPrefab; // assign Embershard prefab here
+    
     // runtime
     GameObject startRoomInstance;
 
@@ -166,6 +171,13 @@ public class RuinGenerator : MonoBehaviour
         roomToGridOrigin[startRoom] = startGridOrigin;
         MarkOccupiedCells(startGridOrigin, startProfile.size, startRoom);
         startRoomInstance = startRoom;
+
+        // As a safety, remove any shards accidentally present in the start room unless explicitly desired
+        // (start rooms typically should not contain loot).
+        if (ensureTreasureHasShard && startRoom.CompareTag("Treasure") == false)
+        {
+            // do nothing; we only inject shards into Treasure-tagged rooms later
+        }
 
         Transform playerSpawn = null;
         foreach (Transform t in startRoom.GetComponentsInChildren<Transform>(true))
@@ -360,6 +372,12 @@ public class RuinGenerator : MonoBehaviour
         roomToGridOrigin[newRoom] = bestNewOrigin;
         MarkOccupiedCells(bestNewOrigin, newProf ? newProf.size : new Vector2Int(6, 6), newRoom);
 
+        // Inject shard into Treasure rooms if needed
+        if (ensureTreasureHasShard && newRoom.CompareTag("Treasure"))
+        {
+            EnsureTreasureShardPresent(newRoom);
+        }
+
         // connect corridor and disable doors
         CreateCorridorBetweenAnchors(FindAnchor(bestBase, DirectionToAnchorName(bestDir)), FindAnchor(newRoom, DirectionToAnchorName(-bestDir)), bestDir, bestUnit);
         DisableDoorAtAnchor(bestBase, DirectionToDoorName(bestDir));
@@ -372,6 +390,41 @@ public class RuinGenerator : MonoBehaviour
         placedTypeCounts[tryType] += 1;
         Debug.Log($"[PCG] Placed end room type '{tryType}' at farthest valid anchor (distance {bestDist:F1}).");
         return true;
+    }
+
+    void EnsureTreasureShardPresent(GameObject room)
+    {
+        if (!room) return;
+        // Already has a shard?
+        var existing = room.GetComponentsInChildren<EmberShardPickup>(true);
+        if (existing != null && existing.Length > 0) return;
+        if (!defaultShardPrefab) return;
+
+        // Preferred pivot: explicit child named 'Treasure_Shard_Pivot' or 'Embershard'
+        Transform pivot = null;
+        foreach (var t in room.GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == "Treasure_Shard_Pivot" || t.name == "Embershard") { pivot = t; break; }
+        }
+
+        Vector3 pos;
+        if (pivot)
+            pos = pivot.position;
+        else
+        {
+            // Fallback to approximate room center using renderers or collider bounds
+            Bounds b = new Bounds(room.transform.position, Vector3.one);
+            bool any = false;
+            var renderers = room.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers) { if (!r) continue; if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds); }
+            if (!any)
+            {
+                var cols = room.GetComponentsInChildren<Collider2D>(true);
+                foreach (var c in cols) { if (!c) continue; if (!any) { b = c.bounds; any = true; } else b.Encapsulate(c.bounds); }
+            }
+            pos = any ? b.center : room.transform.position;
+        }
+        Instantiate(defaultShardPrefab, pos, Quaternion.identity, room.transform);
     }
 
     void TrySpawnEndRoomFarthestFromStart()

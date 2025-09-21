@@ -564,6 +564,7 @@ MonoBehaviour:
   - {fileID: 2005786491922100873, guid: 833ffdbe905d6b643ae95aa3085486ac, type: 3}
   - {fileID: 8978569023216359519, guid: c4031f9b7a53da94c9491f46aa291f20, type: 3}
   - {fileID: 8978569023216359519, guid: bfb87253a571e2048a4ba5363dc776ce, type: 3}
+  - {fileID: 2828387178074330670, guid: 4b633857f32826f4298e7ff04560d1ca, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
   totalRooms: 22
@@ -606,6 +607,10 @@ MonoBehaviour:
     minCount: 1
     maxCount: 1
     weight: 0
+  - type: Treasure
+    minCount: 1
+    maxCount: 3
+    weight: 1
   forbiddenAdjacencies:
   - typeA: Tomb
     typeB: Ritual
@@ -801,9 +806,9 @@ Camera:
   m_NormalizedViewPortRect:
     serializedVersion: 2
     x: 0
-    y: 0
-    width: 1
-    height: 1
+    y: 0.09478673
+    width: 0.5688889
+    height: 0.5687204
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34

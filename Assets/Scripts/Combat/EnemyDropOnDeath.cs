@@ -36,13 +36,16 @@ public class EnemyDropOnDeath : MonoBehaviour
 
     void OnDisable()
     {
-        // Fallback: if an enemy GameObject is destroyed on death, drop here
-        if (!handled && gameObject.scene.isLoaded)
-        {
-            if (GameManager.Instance) GameManager.Instance.IncrementEnemiesKilled();
-            TryDrop();
-            handled = true;
-        }
+        // Fallback: only drop if we are actually dead (health <= 0).
+        // Prevents accidental drops when PCG spawns and destroys temporary room previews.
+        if (handled) return;
+        if (!gameObject.scene.isLoaded) return;
+        if (health == null) return;
+        if (health.currentHealth > 0f) return;
+
+        if (GameManager.Instance) GameManager.Instance.IncrementEnemiesKilled();
+        TryDrop();
+        handled = true;
     }
 
     void TryDrop()
