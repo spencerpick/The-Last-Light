@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 4187031424274525262}
   - component: {fileID: 3128975018413621851}
   - component: {fileID: -5101636232584821440}
+  - component: {fileID: 4793019687234654721}
   m_Layer: 10
   m_Name: Zombie_Of_Darkness
   m_TagString: Zombie
@@ -304,7 +305,6 @@ MonoBehaviour:
   useBinarySpeedParam: 1
   strictAnimatorParams: 0
   zombieTag: Zombie
-  zombieBlindSeconds: 5
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -373,6 +373,21 @@ MonoBehaviour:
   hitWindowStart: 0.35
   hitWindowEnd: 0.55
   endAtNormalized: 0.98
+--- !u!114 &4793019687234654721
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8556194394043968999}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2167efbf92921740a853b3716c33bff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dropChance: 0.253
+  emberShardPrefab: {fileID: 0}
+  dropOffsetJitter: {x: 0.1, y: 0.1}
 --- !u!1001 &7657018766966958981
 PrefabInstance:
   m_ObjectHideFlags: 0

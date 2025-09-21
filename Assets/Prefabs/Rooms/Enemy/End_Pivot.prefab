@@ -19086,6 +19086,8 @@ MonoBehaviour:
   litSprite: {fileID: 21300000, guid: e39d54d35f7785e48a8cc48588036ed4, type: 3}
   interactKey: 101
   playerTag: Player
+  fadeToBlackSeconds: 5
+  requiredShards: 3
 --- !u!1 &7172781663876826363
 GameObject:
   m_ObjectHideFlags: 0

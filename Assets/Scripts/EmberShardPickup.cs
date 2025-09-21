@@ -18,8 +18,11 @@ public class EmberShardPickup : MonoBehaviour
     public float hoverBobSpeed = 2.5f;
     public AudioClip pickupSfx;
     [Range(0f,1f)] public float pickupVolume = 0.9f;
+    public bool useHoverBob = true;
 
     Vector3 basePos;
+    Vector3 lastDesired;
+    bool playerInRange;
 
     void Awake()
     {
@@ -37,21 +40,42 @@ public class EmberShardPickup : MonoBehaviour
 
     void Update()
     {
+        if (!useHoverBob) return;
+
         // tiny hover/bob for life
         if (hoverBobAmplitude > 0f && hoverBobSpeed > 0f)
         {
             float y = Mathf.Sin(Time.time * hoverBobSpeed) * hoverBobAmplitude;
-            transform.position = basePos + new Vector3(0f, y, 0f);
+            Vector3 desired = basePos + new Vector3(0f, y, 0f);
+
+            // If user moved it in play mode, adopt new base position instead of snapping back
+            if ((transform.position - lastDesired).sqrMagnitude > 0.000001f && lastDesired != Vector3.zero)
+            {
+                basePos = transform.position - new Vector3(0f, y, 0f);
+                desired = basePos + new Vector3(0f, y, 0f);
+            }
+
+            transform.position = desired;
+            lastDesired = desired;
         }
     }
 
-    void OnTriggerStay2D(Collider2D other)
+    void OnTriggerEnter2D(Collider2D other)
     {
         if (!other || !other.CompareTag(playerTag)) return;
-        if (Input.GetKeyDown(interactKey))
-        {
+        playerInRange = true;
+    }
+
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (!other || !other.CompareTag(playerTag)) return;
+        playerInRange = false;
+    }
+
+    void LateUpdate()
+    {
+        if (playerInRange && Input.GetKeyDown(interactKey))
             TryPickup();
-        }
     }
 
     void TryPickup()

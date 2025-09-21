@@ -1,11 +1,11 @@
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 [DisallowMultipleComponent]
 public class EmberShardCounterUI : MonoBehaviour
 {
     [Header("UI Refs")]
-    public Text countText;           // assign a Text (legacy) under HUDCanvas
+    public TMP_Text countText;       // assign TextMeshProUGUI under HUDCanvas
     public string prefix = "x";     // shown before the number
     public int lastValue = -1;
 

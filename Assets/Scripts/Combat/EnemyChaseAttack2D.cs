@@ -117,6 +117,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
     public bool externalControlActive = false;
     [Tooltip("If true, this component drives animator during Wander. If false, leave Wander animation to EnemyWander2D.")]
     public bool driveAnimatorInWander = false;
+    [Tooltip("When external control is active (e.g., fleeing to an anchor), don't run direct-to-target movement if no path yet; wait for a path.")]
+    public bool suppressDirectToTargetWhenExternalControl = true;
 
     // ───────── Internals
     Animator animator;
@@ -440,40 +442,49 @@ public class EnemyChaseAttack2D : MonoBehaviour
 
                     if (!usingPath)
                     {
-                        ClearPath();
-
-                        Vector2 toPlayer = player.position - transform.position;
-                        moveDir = toPlayer.sqrMagnitude > 1e-6f ? toPlayer.normalized : Vector2.zero;
-
-                        bool closeHold = (dist <= Mathf.Max(holdDistance, 0.01f)) && losClear;
-                        if (closeHold) moveDir = Vector2.zero;
-
-                        if (!losClear && moveDir.sqrMagnitude > 0f)
+                        // During flee/external-control with grid pathing requested, suppress direct charge.
+                        if (externalControlActive && suppressDirectToTargetWhenExternalControl && useGridPathfinding)
                         {
-                            if (slideTimer <= 0f || committedSlide == Vector2.zero)
+                            ForcePathRecalcNow();
+                            moveDir = Vector2.zero; // wait for path this frame
+                        }
+                        else
+                        {
+                            ClearPath();
+
+                            Vector2 toPlayer = player.position - transform.position;
+                            moveDir = toPlayer.sqrMagnitude > 1e-6f ? toPlayer.normalized : Vector2.zero;
+
+                            bool closeHold = (dist <= Mathf.Max(holdDistance, 0.01f)) && losClear;
+                            if (closeHold) moveDir = Vector2.zero;
+
+                            if (!losClear && moveDir.sqrMagnitude > 0f)
                             {
-                                if (IsBlocked(moveDir, slideProbeDistance, out var hit))
+                                if (slideTimer <= 0f || committedSlide == Vector2.zero)
                                 {
-                                    committedSlide = ChooseSlide(moveDir, hit);
-                                    slideTimer = slideCommitSeconds;
-                                    if (debugLog) Debug.Log($"[{name}] Slide fallback → {committedSlide}");
+                                    if (IsBlocked(moveDir, slideProbeDistance, out var hit))
+                                    {
+                                        committedSlide = ChooseSlide(moveDir, hit);
+                                        slideTimer = slideCommitSeconds;
+                                        if (debugLog) Debug.Log($"[{name}] Slide fallback → {committedSlide}");
+                                    }
+                                }
+                                else slideTimer -= Time.fixedDeltaTime;
+
+                                if (committedSlide != Vector2.zero)
+                                    moveDir = committedSlide;
+
+                                if (HasLineOfSight())
+                                {
+                                    committedSlide = Vector2.zero;
+                                    slideTimer = 0f;
                                 }
                             }
-                            else slideTimer -= Time.fixedDeltaTime;
-
-                            if (committedSlide != Vector2.zero)
-                                moveDir = committedSlide;
-
-                            if (HasLineOfSight())
+                            else
                             {
                                 committedSlide = Vector2.zero;
                                 slideTimer = 0f;
                             }
-                        }
-                        else
-                        {
-                            committedSlide = Vector2.zero;
-                            slideTimer = 0f;
                         }
                     }
 
@@ -834,6 +845,8 @@ public class EnemyChaseAttack2D : MonoBehaviour
             prevPos = transform.position;
         }
     }
+
+    // Removed auto-count in OnDestroy to avoid double counting; use EnemyDropOnDeath or Health2D event
 
 	// ───────── External control helpers (used by flee controller)
 	public void ForceChaseCurrentTarget(bool clearExistingPath = true)

@@ -12,8 +12,12 @@ public class HeartfireInteractable : MonoBehaviour
     [Header("Interaction")]
     public KeyCode interactKey = KeyCode.E;
     public string playerTag = "Player";
+    public float fadeToBlackSeconds = 5f;   // end-of-run fade duration
+    [Header("Requirements")]
+    public int requiredShards = 10;
 
     bool isLit;
+    bool playerInRange;
 
     void Awake()
     {
@@ -30,16 +34,38 @@ public class HeartfireInteractable : MonoBehaviour
         else if (!isLit && extinguishedSprite) spriteRenderer.sprite = extinguishedSprite;
     }
 
-    void OnTriggerStay2D(Collider2D other)
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!other || !other.CompareTag(playerTag)) return;
+        playerInRange = true;
+    }
+
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (!other || !other.CompareTag(playerTag)) return;
+        playerInRange = false;
+    }
+
+    void LateUpdate()
     {
         if (isLit) return;
-        if (!other || !other.CompareTag(playerTag)) return;
-        if (Input.GetKeyDown(interactKey))
+        if (!playerInRange) return;
+        if (!Input.GetKeyDown(interactKey)) return;
+
+        // Check ember shard requirement
+        int have = GameManager.Instance ? GameManager.Instance.GetEmberFragments() : 0;
+        if (have < Mathf.Max(0, requiredShards))
         {
-            isLit = true;
-            ApplySprite();
-            Debug.Log("GAME OVER");
+            Debug.Log($"Heartfire requires {requiredShards} Ember Shards. You currently have {have}.");
+            return;
         }
+
+        isLit = true;
+        ApplySprite();
+        if (GameManager.Instance)
+            GameManager.Instance.TriggerEndRun(Mathf.Max(0.1f, fadeToBlackSeconds));
+        else
+            Debug.Log("GAME OVER");
     }
 }
 

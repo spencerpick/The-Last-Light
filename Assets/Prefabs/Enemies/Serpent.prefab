@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 470245267461475595}
   - component: {fileID: 4836909696162400784}
   - component: {fileID: 4802882290720203209}
+  - component: {fileID: 7164610640718716536}
   m_Layer: 10
   m_Name: Serpent
   m_TagString: Untagged
@@ -199,8 +200,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 857f356a2b21d1f49834d75d5010418f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 5
-  currentHealth: 5
+  maxHealth: 20
+  currentHealth: 20
   hurtIFrames: 0.1
   destroyDelay: 0
   animator: {fileID: 6096196623977292662}
@@ -305,7 +306,6 @@ MonoBehaviour:
   useBinarySpeedParam: 1
   strictAnimatorParams: 0
   zombieTag: 
-  zombieBlindSeconds: 5
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -425,6 +425,21 @@ MonoBehaviour:
   hitWindowStart: 0.35
   hitWindowEnd: 0.55
   endAtNormalized: 0.98
+--- !u!114 &7164610640718716536
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1313446561066280317}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2167efbf92921740a853b3716c33bff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dropChance: 0.258
+  emberShardPrefab: {fileID: 0}
+  dropOffsetJitter: {x: 0.1, y: 0.1}
 --- !u!1001 &6303730388529841673
 PrefabInstance:
   m_ObjectHideFlags: 0

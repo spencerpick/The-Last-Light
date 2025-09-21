@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 5440880114529331044}
   - component: {fileID: 9151090315596040909}
   - component: {fileID: -1840250462980550106}
+  - component: {fileID: 7552708654630355852}
   m_Layer: 10
   m_Name: Mutant
   m_TagString: Untagged
@@ -225,6 +226,10 @@ MonoBehaviour:
   paramX: DirX
   paramY: DirY
   paramSpeed: Speed
+  paramIsMoving: IsMoving
+  animWalkSpeedFloor: 0.1
+  useBinarySpeedParam: 1
+  strictAnimatorParams: 0
   showRoomGizmo: 0
   showDirectionGizmo: 1
   roomGizmoColor: {r: 1, g: 0, b: 0.5707547, a: 0.15}
@@ -240,8 +245,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 857f356a2b21d1f49834d75d5010418f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 5
-  currentHealth: 5
+  maxHealth: 10
+  currentHealth: 10
   hurtIFrames: 0.1
   destroyDelay: 0
   animator: {fileID: 3968637407488380781}
@@ -257,7 +262,19 @@ MonoBehaviour:
       m_Calls: []
   onDied:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 0}
+        m_TargetAssemblyTypeName: EnemyDropOnDeath, Assembly-CSharp
+        m_MethodName: 
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 0
 --- !u!114 &9151090315596040909
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -298,6 +315,11 @@ MonoBehaviour:
     m_Bits: 2176
   faceChangeCooldown: 0.15
   faceAxisHysteresis: 0.2
+  forceFaceToMovementOnWanderAndFlee: 1
+  animWalkSpeedFloor: 0.1
+  useBinarySpeedParam: 1
+  strictAnimatorParams: 0
+  zombieTag: Zombie
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -345,7 +367,23 @@ MonoBehaviour:
   drawPathGrid: 1
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
   externalControlActive: 0
+  driveAnimatorInWander: 0
   pathIndex: 0
+--- !u!114 &7552708654630355852
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3836593367748638530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2167efbf92921740a853b3716c33bff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dropChance: 0.01
+  emberShardPrefab: {fileID: 8083302122614942071, guid: 56b8e27da91fa7b49aac2f8b8e881838, type: 3}
+  dropOffsetJitter: {x: 0.1, y: 0.1}
 --- !u!1001 &5558833241096022884
 PrefabInstance:
   m_ObjectHideFlags: 0
