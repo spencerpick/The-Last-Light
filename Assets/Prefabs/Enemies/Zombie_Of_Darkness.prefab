@@ -394,7 +394,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2167efbf92921740a853b3716c33bff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dropChance: 0.253
+  dropChance: 0.3
   emberShardPrefab: {fileID: 0}
   dropOffsetJitter: {x: 0.1, y: 0.1}
 --- !u!1001 &7657018766966958981

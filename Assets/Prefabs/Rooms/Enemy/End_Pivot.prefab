@@ -19088,6 +19088,8 @@ MonoBehaviour:
   playerTag: Player
   fadeToBlackSeconds: 5
   requiredShards: 3
+  activateSfx: {fileID: 8300000, guid: 80abb5b743d031344a21119731432bd8, type: 3}
+  activateVolume: 0.563
 --- !u!1 &7172781663876826363
 GameObject:
   m_ObjectHideFlags: 0

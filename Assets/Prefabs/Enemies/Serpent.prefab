@@ -212,6 +212,7 @@ MonoBehaviour:
   hitTakenSfx: {fileID: 8300000, guid: ad35af6b63ec8df4988af5bfb3611c42, type: 3}
   hitTakenVolume: 0.159
   hitTakenPitchRange: {x: 0.98, y: 1.05}
+  hitTakenSoundCooldown: 3
   onDamaged:
     m_PersistentCalls:
       m_Calls: []
@@ -312,6 +313,7 @@ MonoBehaviour:
   hitPlayerSfx: {fileID: 0}
   hitPlayerVolume: 0.9
   hitPlayerPitchRange: {x: 0.98, y: 1.05}
+  hitPlayerSoundCooldown: 3
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -444,7 +446,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2167efbf92921740a853b3716c33bff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dropChance: 0.258
+  dropChance: 0.3
   emberShardPrefab: {fileID: 0}
   dropOffsetJitter: {x: 0.1, y: 0.1}
 --- !u!1001 &6303730388529841673
