@@ -25,6 +25,15 @@ public class Health2D : MonoBehaviour, IDamageable
     [Header("FX / Feedback")]
     public HitFlash hitFlash;
     public bool applyKnockback = true;
+    [Header("Audio (Damage/Hit)")]
+    [Tooltip("Sound played when THIS entity takes damage.")]
+    public AudioClip hitTakenSfx;
+    [Range(0f,1f)] public float hitTakenVolume = 0.9f;
+    [Tooltip("Pitch variance for repeated impacts (min..max)")]
+    public Vector2 hitTakenPitchRange = new Vector2(0.98f, 1.05f);
+    [Tooltip("Minimum seconds between playing 'hit taken' sounds for this entity.")]
+    public float hitTakenSoundCooldown = 3f;
+    float nextHitTakenSoundTime;
 
     [Header("Events")]
     public UnityEvent onDamaged;
@@ -75,6 +84,13 @@ public class Health2D : MonoBehaviour, IDamageable
 
         if (applyKnockback && rb)
             rb.AddForce(hit.knockback, ForceMode2D.Impulse);
+
+        // Audio for taking damage
+        if (hitTakenSfx && Time.time >= nextHitTakenSoundTime)
+        {
+            float dur = Audio.OneShotAudio.Play(transform.position, hitTakenSfx, hitTakenVolume, hitTakenPitchRange.x, hitTakenPitchRange.y);
+            nextHitTakenSoundTime = Time.time + Mathf.Max(dur, hitTakenSoundCooldown);
+        }
 
         onDamaged?.Invoke();
 

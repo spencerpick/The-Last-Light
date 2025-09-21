@@ -472,6 +472,7 @@ GameObject:
   - component: {fileID: 178249548}
   - component: {fileID: 178249549}
   - component: {fileID: 178249550}
+  - component: {fileID: 178249551}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -523,9 +524,105 @@ MonoBehaviour:
   shuffle: 1
   loopPlaylist: 1
   playOnStart: 1
-  volume: 0.6
+  volume: 0.077
   crossfadeSeconds: 0
   audioSource: {fileID: 0}
+--- !u!82 &178249551
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 178249547}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 8300000, guid: a5c2f732e2245fa41ab1df84f32f0aa6, type: 3}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &276941682
 GameObject:
   m_ObjectHideFlags: 0
@@ -565,6 +662,8 @@ MonoBehaviour:
   - {fileID: 8978569023216359519, guid: c4031f9b7a53da94c9491f46aa291f20, type: 3}
   - {fileID: 8978569023216359519, guid: bfb87253a571e2048a4ba5363dc776ce, type: 3}
   - {fileID: 2828387178074330670, guid: 4b633857f32826f4298e7ff04560d1ca, type: 3}
+  - {fileID: 8978569023216359519, guid: 5fc53722f69dd494db77642e2eb27e76, type: 3}
+  - {fileID: 1497774974633293288, guid: e8f239c1fa9e8934d9029f8632100006, type: 3}
   corridorPrefabs:
   - {fileID: 8837244718160740862, guid: d40c2a27391132346905370340417d03, type: 3}
   totalRooms: 22
@@ -578,6 +677,8 @@ MonoBehaviour:
   endRoomPrefab: {fileID: 0}
   heartfirePrefab: {fileID: 0}
   endRoomType: Heartfire
+  ensureTreasureHasShard: 1
+  defaultShardPrefab: {fileID: 0}
   roomTypeDefinitions:
   - type: Tomb
     minCount: 2
@@ -611,6 +712,14 @@ MonoBehaviour:
     minCount: 1
     maxCount: 3
     weight: 1
+  - type: Burnt
+    minCount: 1
+    maxCount: -1
+    weight: 2
+  - type: Altar
+    minCount: 1
+    maxCount: 1
+    weight: 0
   forbiddenAdjacencies:
   - typeA: Tomb
     typeB: Ritual
@@ -805,8 +914,8 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0
-    y: 0.09478673
+    x: 0.2151111
+    y: 0.21484992
     width: 0.5688889
     height: 0.5687204
   near clip plane: 0.3

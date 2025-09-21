@@ -254,6 +254,10 @@ MonoBehaviour:
   deathBool: 
   hitFlash: {fileID: 9151090315596040909}
   applyKnockback: 1
+  hitTakenSfx: {fileID: 8300000, guid: 812c4bc45755b4046ab5c47d5205805c, type: 3}
+  hitTakenVolume: 0.117
+  hitTakenPitchRange: {x: 0.98, y: 1.05}
+  hitTakenSoundCooldown: 3
   onDamaged:
     m_PersistentCalls:
       m_Calls: []
@@ -320,6 +324,10 @@ MonoBehaviour:
   useBinarySpeedParam: 1
   strictAnimatorParams: 0
   zombieTag: Zombie
+  hitPlayerSfx: {fileID: 0}
+  hitPlayerVolume: 0.9
+  hitPlayerPitchRange: {x: 0.98, y: 1.05}
+  hitPlayerSoundCooldown: 3
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
@@ -368,6 +376,7 @@ MonoBehaviour:
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
   externalControlActive: 0
   driveAnimatorInWander: 0
+  suppressDirectToTargetWhenExternalControl: 1
   pathIndex: 0
 --- !u!114 &7552708654630355852
 MonoBehaviour:

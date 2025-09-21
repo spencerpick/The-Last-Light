@@ -209,6 +209,9 @@ MonoBehaviour:
   deathBool: 
   hitFlash: {fileID: 2874329532968353122}
   applyKnockback: 1
+  hitTakenSfx: {fileID: 8300000, guid: ad35af6b63ec8df4988af5bfb3611c42, type: 3}
+  hitTakenVolume: 0.159
+  hitTakenPitchRange: {x: 0.98, y: 1.05}
   onDamaged:
     m_PersistentCalls:
       m_Calls: []
@@ -298,7 +301,7 @@ MonoBehaviour:
   holdDistance: 0.75
   losBlockers:
     serializedVersion: 2
-    m_Bits: 2176
+    m_Bits: 3200
   faceChangeCooldown: 0.15
   faceAxisHysteresis: 0.2
   forceFaceToMovementOnWanderAndFlee: 1
@@ -306,12 +309,15 @@ MonoBehaviour:
   useBinarySpeedParam: 1
   strictAnimatorParams: 0
   zombieTag: 
+  hitPlayerSfx: {fileID: 0}
+  hitPlayerVolume: 0.9
+  hitPlayerPitchRange: {x: 0.98, y: 1.05}
   useGridPathfinding: 1
   pathCellSize: 0.32
   pathWorldSize: {x: 16, y: 16}
   pathObstacleMask:
     serializedVersion: 2
-    m_Bits: 2432
+    m_Bits: 3456
   pathIncludeTriggers: 1
   pathAllowDiagonal: 0
   agentRadius: 0.2
@@ -354,6 +360,7 @@ MonoBehaviour:
   gridColor: {r: 0, g: 1, b: 1, a: 0.06}
   externalControlActive: 0
   driveAnimatorInWander: 0
+  suppressDirectToTargetWhenExternalControl: 1
   pathIndex: 0
 --- !u!114 &4836909696162400784
 MonoBehaviour:

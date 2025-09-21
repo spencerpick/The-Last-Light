@@ -16,6 +16,10 @@ public class HeartfireInteractable : MonoBehaviour
     [Header("Requirements")]
     public int requiredShards = 10;
 
+    [Header("Audio")]
+    public AudioClip activateSfx;
+    [Range(0f,1f)] public float activateVolume = 1f;
+
     bool isLit;
     bool playerInRange;
 
@@ -62,6 +66,8 @@ public class HeartfireInteractable : MonoBehaviour
 
         isLit = true;
         ApplySprite();
+        if (activateSfx)
+            Audio.OneShotAudio.Play(transform.position, activateSfx, activateVolume, 1f, 1f);
         if (GameManager.Instance)
             GameManager.Instance.TriggerEndRun(Mathf.Max(0.1f, fadeToBlackSeconds));
         else

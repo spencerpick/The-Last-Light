@@ -18,4 +18,4 @@ MonoBehaviour:
   boxSize: {x: 1.1, y: 0.8}
   forwardOffset: 0.55
   swingSfx: {fileID: 0}
-  hitSfx: {fileID: 0}
+  hitSfx: {fileID: 8300000, guid: ad35af6b63ec8df4988af5bfb3611c42, type: 3}

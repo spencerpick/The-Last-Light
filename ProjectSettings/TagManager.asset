@@ -16,6 +16,8 @@ TagManager:
   - Zombie
   - Heartfire
   - Start
+  - Burnt
+  - Altar
   layers:
   - Default
   - TransparentFX

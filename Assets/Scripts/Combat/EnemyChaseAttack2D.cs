@@ -39,6 +39,14 @@ public class EnemyChaseAttack2D : MonoBehaviour
     [Header("Enemy Tags / Effects")]
     [Tooltip("If this GameObject is tagged with this tag (e.g., 'Zombie'), apply the blindness effect to the player on hit.")]
     public string zombieTag = "Zombie";
+    [Header("Audio (On-Hit vs Player)")]
+    [Tooltip("Sound to play when this enemy hits the player.")]
+    public AudioClip hitPlayerSfx;
+    [Range(0f,1f)] public float hitPlayerVolume = 0.9f;
+    public Vector2 hitPlayerPitchRange = new Vector2(0.98f, 1.05f);
+    [Tooltip("Minimum seconds between this enemy's 'hit player' sounds.")]
+    public float hitPlayerSoundCooldown = 3f;
+    float nextHitPlayerSoundTime;
 
     // ───────────────────────── PATHFINDING ─────────────────────────
     [Header("Pathfinding (runtime A*)")]
@@ -825,6 +833,12 @@ public class EnemyChaseAttack2D : MonoBehaviour
 			// Optional enemy-specific on-hit effects (e.g., zombie blindness)
 			var targetRoot = c.attachedRigidbody ? c.attachedRigidbody.transform : c.transform;
 			ApplyOnHitEffects(targetRoot);
+            // Play enemy-on-player hit SFX
+            if (hitPlayerSfx && Time.time >= nextHitPlayerSoundTime)
+            {
+                float dur = Audio.OneShotAudio.Play(transform.position, hitPlayerSfx, hitPlayerVolume, hitPlayerPitchRange.x, hitPlayerPitchRange.y);
+                nextHitPlayerSoundTime = Time.time + Mathf.Max(dur, hitPlayerSoundCooldown);
+            }
         }
 
         if (debugLog) Debug.Log($"[{name}] HIT WINDOW hits={hitThisSwing.Count}");
