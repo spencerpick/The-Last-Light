@@ -1,3 +1,4 @@
+// Simple singleton tracking run time, shards, kills, and handling the end-run fade.
 using UnityEngine;
 
 public class GameManager : MonoBehaviour

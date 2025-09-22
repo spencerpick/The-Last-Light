@@ -1,3 +1,4 @@
+// Lightweight playlist player with optional shuffle and crossfade.
 using System.Collections.Generic;
 using UnityEngine;
 

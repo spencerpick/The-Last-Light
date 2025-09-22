@@ -1,3 +1,4 @@
+// WASD/arrow movement with optional sprint tied to stamina, and basic 4‑way facing.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

@@ -1,3 +1,4 @@
+// Spawns enemies when the player enters the room (or walks into a bounds), with optional fade-in.
 using System.Collections.Generic;
 using UnityEngine;
 

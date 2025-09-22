@@ -1,3 +1,4 @@
+// Drives an attack’s hit window by reading Animator normalized time (no animation events needed).
 using UnityEngine;
 
 /// <summary>

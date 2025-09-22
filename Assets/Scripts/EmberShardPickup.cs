@@ -1,3 +1,4 @@
+// Little collectible shard; optionally glows and does a tiny hover so it feels alive.
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 

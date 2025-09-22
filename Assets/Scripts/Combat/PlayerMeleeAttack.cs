@@ -1,3 +1,4 @@
+// Straightforward melee: plays an attack, checks a box at impact, and feeds IDamageable.
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -44,7 +45,7 @@ public class PlayerMeleeAttack : MonoBehaviour
 
     void Update()
     {
-        // TEMP input – replace with your input system when ready
+        // TEMP input ï¿½ replace with your input system when ready
         if (Input.GetButtonDown("Fire1"))
         {
             Log("Fire1 pressed.");

@@ -1,3 +1,4 @@
+// Temporary “flee to an anchor” layer: borrows the chase brain to run to a safer spot, then resumes.
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;

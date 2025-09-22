@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// Tiny grid A*: samples obstacles, runs a basic search, and returns world-space waypoints.
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>

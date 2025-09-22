@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// 2D chase/attack brain with simple A* and a few “don’t get stuck” safeties.
+using System.Collections.Generic;
 using UnityEngine;
 // Force Unity types over System.Numerics
 using Vector2 = UnityEngine.Vector2;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// Basic HP with brief i-frames, knockback, and a couple of UnityEvents for hooks.
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 

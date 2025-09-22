@@ -1,3 +1,4 @@
+// Quick helper for playing a 2D one-shot with randomized pitch and auto-cleanup.
 using UnityEngine;
 
 namespace Audio

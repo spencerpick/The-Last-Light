@@ -1,3 +1,4 @@
+// Marks a room volume and tells the GameManager when the player enters/exits it.
 using UnityEngine;
 
 public class RoomTrigger : MonoBehaviour

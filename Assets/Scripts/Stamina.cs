@@ -1,4 +1,4 @@
-// Stamina.cs
+// Simple stamina pool with regen, delay, and a couple of events for UI/FX hooks.
 using UnityEngine;
 using UnityEngine.Events;
 

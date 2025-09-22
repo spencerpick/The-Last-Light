@@ -1,4 +1,4 @@
-﻿// PlayerStatusHUD.cs (auto-rebinds to the active Player clone; keeps your colors/lerp/FX)
+﻿// Simple health/stamina HUD that keeps itself bound to the active player and updates smoothly.
 using UnityEngine;
 using UnityEngine.UI;
 

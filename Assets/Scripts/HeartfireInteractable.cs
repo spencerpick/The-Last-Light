@@ -1,3 +1,4 @@
+// Small altar at the end: lets the player finish the run once they’ve got enough shards.
 using UnityEngine;
 
 [RequireComponent(typeof(Collider2D))]

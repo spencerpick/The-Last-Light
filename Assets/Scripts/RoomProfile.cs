@@ -1,3 +1,4 @@
+// Basic size metadata for a room (computed from a BoxCollider2D and grid unit size).
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider2D))]

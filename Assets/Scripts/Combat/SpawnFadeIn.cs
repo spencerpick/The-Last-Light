@@ -1,3 +1,4 @@
+// Simple spawn fade: darken-and-fade sprites (and optionally lights) back to normal over time.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

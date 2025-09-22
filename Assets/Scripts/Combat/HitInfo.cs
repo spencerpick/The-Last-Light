@@ -1,3 +1,4 @@
+// Plain-old struct describing a hit so we can pass consistent info around.
 using UnityEngine;
 
 public struct HitInfo

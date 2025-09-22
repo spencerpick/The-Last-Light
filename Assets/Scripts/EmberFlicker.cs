@@ -1,3 +1,4 @@
+// Tiny flicker for a Light2D: randomizes intensity and scale every few frames.
 using UnityEngine;
 using UnityEngine.Rendering.Universal; // Needed for Light2D
 

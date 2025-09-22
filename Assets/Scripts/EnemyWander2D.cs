@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿// Lightweight 4‑way wander with simple room binding and a small “stuck” watchdog.
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 

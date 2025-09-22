@@ -1,3 +1,4 @@
+// Smooth follow camera that lazily chases the player with an offset.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

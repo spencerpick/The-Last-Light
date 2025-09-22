@@ -1,3 +1,4 @@
+// Quick red flash on SpriteRenderers when hit; restores original colors automatically.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

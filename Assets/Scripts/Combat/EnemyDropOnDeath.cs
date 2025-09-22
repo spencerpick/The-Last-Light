@@ -1,3 +1,4 @@
+// Small helper for enemy loot: drops a shard on death based on a simple chance.
 using UnityEngine;
 
 [DisallowMultipleComponent]

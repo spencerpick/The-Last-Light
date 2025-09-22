@@ -1,3 +1,4 @@
+// Simple “press E near a torch to light it” interactor using a layer filter.
 using UnityEngine;
 
 public class TorchInteractor : MonoBehaviour

@@ -1,3 +1,4 @@
+// Tiny HUD updater for shard count (TextMeshPro).
 using UnityEngine;
 using TMPro;
 

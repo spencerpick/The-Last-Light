@@ -1,3 +1,4 @@
+// Manages a simple temporary “blindness” effect on the player’s Light2D.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

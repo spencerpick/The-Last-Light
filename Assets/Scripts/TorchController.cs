@@ -1,3 +1,4 @@
+// Tiny torch logic: toggles an Animator bool and a Light2D on/off.
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 

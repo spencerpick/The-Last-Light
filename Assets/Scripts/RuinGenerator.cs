@@ -1,4 +1,4 @@
-﻿// FULL RuinGenerator.cs – FORBIDDEN ADJACENCY: CONNECTION CHECK ONLY
+﻿// Drops a starter room, grows a small dungeon, and hooks up corridors with simple grid checks.
 
 using System;
 using System.Collections;

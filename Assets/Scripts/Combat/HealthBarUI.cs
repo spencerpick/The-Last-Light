@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿// World-space or screen-space health bar that fades in on damage and out when back to full.
+using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
 

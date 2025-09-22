@@ -1,3 +1,4 @@
+// Fades to black and shows simple run stats (time, shards, kills).
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;

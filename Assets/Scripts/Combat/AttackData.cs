@@ -1,3 +1,4 @@
+// ScriptableObject for melee/basic attacks: damage, knockback, cooldown, and hitbox info.
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "AttackData", menuName = "Combat/Attack Data", order = 0)]
